@@ -1,0 +1,188 @@
+{
+  "api_endpoint": "POST /translate",
+  "description": "Translate text using Groq's llama3-70b model",
+  
+  "examples": [
+    {
+      "name": "Example 1: English to Hindi",
+      "request": {
+        "text": "Hello, how are you?",
+        "target_lang": "Hindi",
+        "source_lang": "auto"
+      },
+      "response_success": {
+        "translated_text": "नमस्ते, आप कैसे हैं?",
+        "source_lang": "auto",
+        "target_lang": "Hindi"
+      },
+      "http_code": 200
+    },
+    {
+      "name": "Example 2: English to Spanish",
+      "request": {
+        "text": "Good morning, welcome to our application!",
+        "target_lang": "Spanish",
+        "source_lang": "auto"
+      },
+      "response_success": {
+        "translated_text": "¡Buenos días, bienvenido a nuestra aplicación!",
+        "source_lang": "auto",
+        "target_lang": "Spanish"
+      },
+      "http_code": 200
+    },
+    {
+      "name": "Example 3: French to German",
+      "request": {
+        "text": "Bonjour, ça va?",
+        "target_lang": "German",
+        "source_lang": "French"
+      },
+      "response_success": {
+        "translated_text": "Guten Tag, wie geht es dir?",
+        "source_lang": "French",
+        "target_lang": "German"
+      },
+      "http_code": 200
+    },
+    {
+      "name": "Example 4: Complex sentence (English to Chinese)",
+      "request": {
+        "text": "The quick brown fox jumps over the lazy dog",
+        "target_lang": "Chinese",
+        "source_lang": "English"
+      },
+      "response_success": {
+        "translated_text": "敏捷的棕色狐狸跳过了懒惰的狗",
+        "source_lang": "English",
+        "target_lang": "Chinese"
+      },
+      "http_code": 200
+    },
+    {
+      "name": "Example 5: Error - No text provided",
+      "request": {
+        "text": "",
+        "target_lang": "Hindi",
+        "source_lang": "auto"
+      },
+      "response_error": {
+        "error": "No text provided"
+      },
+      "http_code": 400
+    },
+    {
+      "name": "Example 6: Error - No target language",
+      "request": {
+        "text": "Hello",
+        "target_lang": "",
+        "source_lang": "auto"
+      },
+      "response_error": {
+        "error": "No target language provided"
+      },
+      "http_code": 400
+    },
+    {
+      "name": "Example 7: Error - Missing API key",
+      "request": {
+        "text": "Hello",
+        "target_lang": "Hindi"
+      },
+      "response_error": {
+        "error": "GROQ_API_KEY environment variable is not set. Please add it to your .env file."
+      },
+      "http_code": 500
+    }
+  ],
+
+  "explain_endpoint": "POST /explain",
+  "explain_description": "Get explanation for a translation",
+  
+  "explain_examples": [
+    {
+      "name": "Example 1: Explain English to Hindi translation",
+      "request": {
+        "original": "Hello",
+        "translation": "नमस्ते"
+      },
+      "response": {
+        "explanation": "नमस्ते (Namaste) is a traditional Hindi greeting that literally means 'I bow to you'. It carries respect and warmth, unlike the casual 'Hello'. It's commonly used in Indian culture and is more formal than a simple greeting."
+      },
+      "http_code": 200
+    },
+    {
+      "name": "Example 2: Explain cultural context",
+      "request": {
+        "original": "Good morning",
+        "translation": "सुप्रभात"
+      },
+      "response": {
+        "explanation": "सुप्रभात (Suprabhat) is a more formal Hindi way to say 'Good morning'. While 'Good morning' is universal, सुप्रभात is specifically Hindi and carries cultural significance. It's often used in formal or respectful contexts."
+      },
+      "http_code": 200
+    }
+  ],
+
+  "curl_examples": {
+    "example_1_basic": {
+      "command": "curl -X POST http://localhost:5000/translate -H \"Content-Type: application/json\" -d '{\"text\": \"Hello\", \"target_lang\": \"Hindi\"}'",
+      "description": "Basic translation request"
+    },
+    
+    "example_2_with_source": {
+      "command": "curl -X POST http://localhost:5000/translate -H \"Content-Type: application/json\" -d '{\"text\": \"Bonjour\", \"target_lang\": \"English\", \"source_lang\": \"French\"}'",
+      "description": "Translation with source language specified"
+    },
+    
+    "example_3_explain": {
+      "command": "curl -X POST http://localhost:5000/explain -H \"Content-Type: application/json\" -d '{\"original\": \"Hello\", \"translation\": \"नमस्ते\"}'",
+      "description": "Get translation explanation"
+    }
+  },
+
+  "python_examples": {
+    "example_1_direct_function": {
+      "code": "from services.groq_service import translate_text\n\nresult = translate_text('Hello', 'Hindi')\nprint(result)  # Output: नमस्ते",
+      "description": "Use translate_text function directly"
+    },
+    
+    "example_2_with_requests": {
+      "code": "import requests\n\nresponse = requests.post('http://localhost:5000/translate', json={\n    'text': 'Hello',\n    'target_lang': 'Spanish'\n})\n\nprint(response.json())",
+      "description": "Use requests library to call API"
+    },
+    
+    "example_3_complete_function": {
+      "code": "from services.groq_service import complete\n\nsystem = 'You are a helpful translator.'\nuser = 'Translate \"Hello\" to Spanish'\n\nresponse = complete(system, user)\nprint(response)  # Output: Hola",
+      "description": "Use complete function for custom prompts"
+    }
+  },
+
+  "supported_languages": [
+    "English",
+    "Hindi",
+    "Bengali",
+    "Tamil",
+    "Telugu",
+    "Marathi",
+    "Urdu",
+    "French",
+    "Spanish",
+    "German",
+    "Chinese",
+    "Japanese",
+    "Korean",
+    "Arabic",
+    "Portuguese",
+    "Russian"
+  ],
+
+  "notes": [
+    "Response time is typically 1-3 seconds (normal for llama3-70b model)",
+    "API key must be set in .env file before running",
+    "Always include target_lang in request",
+    "source_lang defaults to 'auto' (auto-detection)",
+    "Translations are contextual and may vary slightly",
+    "Error messages are always meaningful and user-friendly"
+  ]
+}
