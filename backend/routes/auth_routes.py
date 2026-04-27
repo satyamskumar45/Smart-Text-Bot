@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask import Blueprint, request, make_response
-from services.auth_service import authenticate_user, register_user, refresh_user_session, logout_user, create_guest_profile, create_guest_access_token
+from services.auth_service import authenticate_user, register_user, refresh_user_session, logout_user, create_guest_profile, create_guest_access_token, get_user_session
 from models.guest_session_model import get_guest_session
 from utils.response import success, error
 from config.settings import Settings
@@ -112,11 +112,9 @@ def refresh():
 @auth_bp.route('/session', methods=['GET'])
 def session():
     refresh_token = request.cookies.get(Settings.JWT_COOKIE_NAME)
-    auth_payload = refresh_user_session(refresh_token)
+    auth_payload = get_user_session(refresh_token)
     if auth_payload:
-        response = make_response(success({'user': auth_payload['user'], 'access_token': auth_payload['access_token']}))
-        _attach_refresh_cookie(response, auth_payload['refresh_token'], auth_payload['refresh_expires'])
-        return response
+        return success({'user': auth_payload['user'], 'access_token': auth_payload['access_token']})
 
     guest_session_id = request.cookies.get('guest_session_id')
     if guest_session_id:
@@ -140,15 +138,28 @@ def logout():
     logout_user(refresh_token)
     response = make_response(success({'message': 'Logged out successfully'}))
     _clear_refresh_cookie(response)
+    response.set_cookie(
+        key='guest_session_id',
+        value='',
+        httponly=True,
+        secure=Settings.JWT_COOKIE_SECURE,
+        samesite='None' if Settings.JWT_COOKIE_SECURE else 'Lax',
+        expires=0,
+        path='/',
+    )
     return response
 
 
 @auth_bp.route('/guest', methods=['POST'])
 def guest():
-    payload = request.json or {}
     guest_profile = create_guest_profile()
     same_site = 'None' if Settings.JWT_COOKIE_SECURE else 'Lax'
-    response = make_response(success({'guest_session_id': guest_profile['session_id'], 'access_token': guest_profile['access_token'], 'role': 'guest'}))
+    response = make_response(success({
+        'guest_session_id': guest_profile['session_id'],
+        'access_token': guest_profile['access_token'],
+        'user': guest_profile['user'],
+        'role': 'guest',
+    }))
     response.set_cookie(
         key='guest_session_id',
         value=guest_profile['session_id'],

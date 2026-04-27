@@ -27,6 +27,9 @@ def get_db():
                 user=Settings.DB_USER,
                 password=Settings.DB_PASSWORD,
                 database=Settings.DB_NAME,
+                connection_timeout=Settings.DB_CONNECT_TIMEOUT,
+                charset="utf8mb4",
+                use_unicode=True,
                 autocommit=False,
             )
 
@@ -46,7 +49,10 @@ def get_db():
             raise RuntimeError(msg) from exc
 
     try:
-        return _db_pool.get_connection()
+        connection = _db_pool.get_connection()
+        if not connection.is_connected():
+            connection.reconnect(attempts=1, delay=0)
+        return connection
 
     except MySQLError as exc:
         print(f"[DB CONNECTION ERROR] failed to get connection from pool: {exc}")

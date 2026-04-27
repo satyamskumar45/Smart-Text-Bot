@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import request, jsonify, g
+from flask import request, g
 from utils.jwt_helper import decode_access_token
 from models.guest_session_model import get_guest_session
 from models.user_model import get_user_by_id
@@ -20,6 +20,32 @@ def _load_guest_from_cookie():
     }
 
 
+def _load_principal_from_token(token):
+    try:
+        payload = decode_access_token(token)
+    except ValueError as exc:
+        return None, exc
+
+    if payload.get('role') == 'user':
+        user = get_user_by_id(payload.get('sub'))
+        if not user:
+            return None, ValueError('User account not found')
+        return {
+            'id': user['id'],
+            'email': user['email'],
+            'display_name': user['display_name'],
+            'role': user['role'],
+        }, None
+
+    if payload.get('role') == 'guest':
+        guest = _load_guest_from_cookie()
+        if not guest or payload.get('sub') != guest['guest_session_id']:
+            return None, ValueError('Guest session invalid or expired')
+        return guest, None
+
+    return None, ValueError('Unauthorized user type')
+
+
 def jwt_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -29,30 +55,17 @@ def jwt_required(view):
             token = auth_header.split(' ', 1)[1].strip()
 
         if token:
-            try:
-                payload = decode_access_token(token)
-            except ValueError as exc:
-                return error(str(exc), 401)
-
-            if payload.get('role') == 'user':
-                user = get_user_by_id(payload.get('sub'))
-                if not user:
-                    return error('User account not found', 401)
-                g.current_user = {
-                    'id': user['id'],
-                    'email': user['email'],
-                    'display_name': user['display_name'],
-                    'role': user['role'],
-                }
+            principal, auth_error = _load_principal_from_token(token)
+            if principal:
+                g.current_user = principal
                 return view(*args, **kwargs)
-            elif payload.get('role') == 'guest':
-                guest = _load_guest_from_cookie()
-                if not guest or payload.get('sub') != guest['guest_session_id']:
-                    return error('Guest session invalid or expired', 401)
-                g.current_user = guest
-                return view(*args, **kwargs)
+            if not _load_guest_from_cookie():
+                return error(str(auth_error), 401)
 
-            return error('Unauthorized user type', 401)
+        guest = _load_guest_from_cookie()
+        if guest:
+            g.current_user = guest
+            return view(*args, **kwargs)
 
         return error('Authentication required', 401)
 
@@ -68,28 +81,16 @@ def optional_auth(view):
             token = auth_header.split(' ', 1)[1].strip()
 
         if token:
-            try:
-                payload = decode_access_token(token)
-            except ValueError:
-                token = None
-                payload = None
-
-        if token and payload and payload.get('role') == 'user':
-            user = get_user_by_id(payload.get('sub'))
-            if user:
-                g.current_user = {
-                    'id': user['id'],
-                    'email': user['email'],
-                    'display_name': user['display_name'],
-                    'role': user['role'],
-                }
+            principal, auth_error = _load_principal_from_token(token)
+            if principal:
+                g.current_user = principal
+                return view(*args, **kwargs)
+            if auth_error and 'User account not found' in str(auth_error):
+                g.current_user = None
                 return view(*args, **kwargs)
 
         guest = _load_guest_from_cookie()
-        if guest and payload and payload.get('role') == 'guest' and payload.get('sub') == guest['guest_session_id']:
-            g.current_user = guest
-            return view(*args, **kwargs)
-        if guest and not token:
+        if guest:
             g.current_user = guest
             return view(*args, **kwargs)
 

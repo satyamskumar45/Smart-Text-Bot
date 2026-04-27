@@ -6,7 +6,82 @@ const API = axios.create({
   withCredentials: true,
 });
 
+const AUTH_STORAGE_KEY = "smarttextbot.auth";
+const AUTH_STORAGE_VERSION = 1;
+
 let authToken = null;
+
+function getStorage(remember = false) {
+  try {
+    return remember ? window.localStorage : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredSessionFrom(storage) {
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const rawValue = storage.getItem(AUTH_STORAGE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue);
+    if (parsed?.version !== AUTH_STORAGE_VERSION || !parsed?.user || !parsed?.access_token) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredSessionFrom(storage) {
+  try {
+    storage?.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
+export function getStoredSession() {
+  return readStoredSessionFrom(getStorage(false)) || readStoredSessionFrom(getStorage(true));
+}
+
+export function hasStoredSession() {
+  return Boolean(getStoredSession());
+}
+
+export function persistSession({ access_token, user, remember = false }) {
+  const payload = {
+    version: AUTH_STORAGE_VERSION,
+    access_token,
+    user,
+    remember: Boolean(remember),
+    updated_at: Date.now(),
+  };
+
+  const primaryStorage = getStorage(remember);
+  const secondaryStorage = getStorage(!remember);
+
+  clearStoredSessionFrom(secondaryStorage);
+
+  try {
+    primaryStorage?.setItem(AUTH_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Storage is an optimization only; auth still works with cookies.
+  }
+}
+
+export function clearStoredSession() {
+  clearStoredSessionFrom(getStorage(false));
+  clearStoredSessionFrom(getStorage(true));
+}
 
 export function setAuthToken(token) {
   authToken = token;

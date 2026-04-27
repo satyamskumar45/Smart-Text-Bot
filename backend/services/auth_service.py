@@ -1,13 +1,21 @@
-import hashlib
 import secrets
 from datetime import datetime, timedelta
 from config.settings import Settings
 from models.user_model import create_user, get_user_by_email, get_user_by_id, update_user_last_active
 from models.guest_session_model import create_guest_session, convert_guest_to_user, update_guest_usage
-from models.refresh_token_model import store_refresh_token, find_refresh_token, revoke_refresh_token, revoke_refresh_tokens_for_user
+from models.refresh_token_model import store_refresh_token, find_refresh_token, revoke_refresh_token
 from utils.password_helper import hash_password, check_password
 from utils.jwt_helper import create_access_token
 from validators.auth_validator import validate_login_payload, validate_signup_payload
+
+
+def _serialize_user(user):
+    return {
+        'id': user['id'],
+        'email': user['email'],
+        'display_name': user['display_name'] or 'Learner',
+        'role': user['role'],
+    }
 
 
 def _build_refresh_token(user_id, user_agent=None, ip_address=None, remember=False):
@@ -33,12 +41,12 @@ def register_user(email, password, display_name=None, guest_session_id=None, rem
     refresh_token, refresh_expires = _build_refresh_token(user_id, user_agent=user_agent, ip_address=ip_address, remember=remember)
 
     return {
-        'user': {
+        'user': _serialize_user({
             'id': user_id,
             'email': validated['email'],
-            'display_name': display_name or 'Learner',
+            'display_name': display_name,
             'role': 'user',
-        },
+        }),
         'access_token': access_token,
         'refresh_token': refresh_token,
         'refresh_expires': refresh_expires,
@@ -59,19 +67,14 @@ def authenticate_user(email, password, remember=False, user_agent=None, ip_addre
     refresh_token, refresh_expires = _build_refresh_token(user['id'], user_agent=user_agent, ip_address=ip_address, remember=remember)
 
     return {
-        'user': {
-            'id': user['id'],
-            'email': user['email'],
-            'display_name': user['display_name'] or 'Learner',
-            'role': user['role'],
-        },
+        'user': _serialize_user(user),
         'access_token': access_token,
         'refresh_token': refresh_token,
         'refresh_expires': refresh_expires,
     }
 
 
-def refresh_user_session(refresh_token):
+def get_user_session(refresh_token):
     if not refresh_token:
         return None
 
@@ -88,18 +91,23 @@ def refresh_user_session(refresh_token):
         revoke_refresh_token(refresh_token)
         return None
 
+    return {
+        'user': _serialize_user(user),
+        'access_token': create_access_token({'sub': str(user['id']), 'role': user['role']}),
+    }
+
+
+def refresh_user_session(refresh_token):
+    session_payload = get_user_session(refresh_token)
+    if not session_payload:
+        return None
+
     revoke_refresh_token(refresh_token)
-    access_token = create_access_token({'sub': str(user['id']), 'role': user['role']})
-    new_refresh_token, refresh_expires = _build_refresh_token(user['id'])
+    new_refresh_token, refresh_expires = _build_refresh_token(session_payload['user']['id'])
 
     return {
-        'user': {
-            'id': user['id'],
-            'email': user['email'],
-            'display_name': user['display_name'] or 'Learner',
-            'role': user['role'],
-        },
-        'access_token': access_token,
+        'user': session_payload['user'],
+        'access_token': session_payload['access_token'],
         'refresh_token': new_refresh_token,
         'refresh_expires': refresh_expires,
     }
@@ -117,6 +125,10 @@ def create_guest_profile():
     return {
         'session_id': session_id,
         'access_token': access_token,
+        'user': {
+            'role': 'guest',
+            'display_name': 'Guest Learner',
+        },
         'role': 'guest',
     }
 

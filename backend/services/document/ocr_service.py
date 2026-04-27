@@ -3,6 +3,8 @@ OCR Service - Complete OCR pipeline with preprocessing and postprocessing.
 Integrates image enhancement, OCR extraction, and text cleanup.
 """
 
+import os
+import shutil
 import pytesseract
 from PIL import Image
 import io
@@ -19,10 +21,48 @@ class OCRService:
     
     def __init__(self):
         """Initialize OCR service"""
-        pytesseract.pytesseract.tesseract_cmd = Settings.TESSERACT_PATH
+        self.tesseract_cmd = self._resolve_tesseract_cmd()
+        if self.tesseract_cmd:
+            pytesseract.pytesseract.tesseract_cmd = self.tesseract_cmd
         self.preprocessor = OCRPreprocessor()
         self.cleaner = OCRTextCleaner()
         self.reconstructor = OCRTextReconstructor()
+
+    def _resolve_tesseract_cmd(self) -> Optional[str]:
+        """Resolve the best available Tesseract executable path for the current environment."""
+        configured_path = (Settings.TESSERACT_PATH or "").strip()
+        if configured_path:
+            return configured_path
+
+        path_binary = shutil.which("tesseract")
+        if path_binary:
+            return path_binary
+
+        windows_fallback = (Settings.TESSERACT_WINDOWS_FALLBACK or "").strip()
+        if Settings.is_windows() and windows_fallback and os.path.exists(windows_fallback):
+            return windows_fallback
+
+        return None
+
+    def is_available(self) -> bool:
+        """Check whether Tesseract is available in the current runtime."""
+        return bool(self._resolve_tesseract_cmd())
+
+    def get_unavailable_message(self) -> str:
+        """Return a production-safe message when OCR runtime dependencies are unavailable."""
+        return (
+            "OCR is currently unavailable because the Tesseract runtime is not installed on this server. "
+            "Please install Tesseract or configure the TESSERACT_PATH environment variable."
+        )
+
+    def ensure_available(self):
+        """Raise a clean OCR error when Tesseract is unavailable."""
+        resolved_cmd = self._resolve_tesseract_cmd()
+        if not resolved_cmd:
+            raise OCRError(self.get_unavailable_message())
+
+        self.tesseract_cmd = resolved_cmd
+        pytesseract.pytesseract.tesseract_cmd = resolved_cmd
     
     @retry_with_fallback(max_attempts=2)
     @log_execution
@@ -49,6 +89,8 @@ class OCRService:
             OCRError: If OCR fails
         """
         try:
+            self.ensure_available()
+
             # Step 1: Preprocess image
             print(f"[OCR] Preprocessing image with method: {preprocess_method}")
             original, preprocessed = self.preprocessor.enhance_for_ocr(
@@ -92,6 +134,8 @@ class OCRService:
             print(f"[OCR] Extraction complete: {result['word_count']} words, {confidence}% confidence")
             return result
             
+        except pytesseract.TesseractNotFoundError:
+            raise OCRError(self.get_unavailable_message())
         except Exception as e:
             raise OCRError(f"OCR extraction failed: {str(e)}")
     
@@ -111,6 +155,8 @@ class OCRService:
             Cleaned text string
         """
         try:
+            self.ensure_available()
+
             if preprocess:
                 image = preprocess_for_ocr(image_bytes)
             else:
@@ -123,6 +169,8 @@ class OCRService:
             
             return self.cleaner.clean(raw_text)
             
+        except pytesseract.TesseractNotFoundError:
+            raise OCRError(self.get_unavailable_message())
         except Exception as e:
             raise OCRError(f"OCR failed: {str(e)}")
     
@@ -166,6 +214,7 @@ class OCRService:
     def _get_confidence(self, image: Image.Image, lang: str = "eng") -> float:
         """Get OCR confidence score"""
         try:
+            self.ensure_available()
             # Get detailed data from Tesseract
             data = pytesseract.image_to_data(image, lang=lang, output_type=pytesseract.Output.DICT)
             
@@ -234,6 +283,7 @@ def extract_text_from_image(
         Extracted text
     """
     service = OCRService()
+    service.ensure_available()
     
     if preprocess and clean:
         return service.extract_text_simple(image_bytes, preprocess=True)

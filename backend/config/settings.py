@@ -1,6 +1,7 @@
 """Backend application settings loaded from environment variables."""
 
 import os
+import platform
 from pathlib import Path
 from dotenv import load_dotenv
 from core.exceptions import ConfigurationError
@@ -33,6 +34,12 @@ class Settings:
     DB_NAME = os.getenv("DB_NAME", "smarttextbot")
     DB_POOL_NAME = os.getenv("DB_POOL_NAME", "smarttextbot_pool")
     DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+    DB_CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", "8"))
+    TESSERACT_PATH = os.getenv("TESSERACT_PATH", "").strip()
+    TESSERACT_WINDOWS_FALLBACK = os.getenv(
+        "TESSERACT_WINDOWS_FALLBACK",
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    ).strip()
 
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "replace-with-secure-secret")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -61,6 +68,10 @@ class Settings:
     @classmethod
     def get_language_name(cls, code: str) -> str:
         return cls.SUPPORTED_LANGUAGES.get(code.lower(), code.upper())
+
+    @classmethod
+    def is_windows(cls) -> bool:
+        return platform.system().lower() == "windows"
 
 
 Settings.validate()
