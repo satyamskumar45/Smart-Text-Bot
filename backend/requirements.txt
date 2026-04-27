@@ -11,3 +11,5 @@ mysql-connector-python==9.6.0
 bcrypt==5.0.0
 pytesseract==0.3.13
 httpx==0.28.1
+numpy==2.2.5
+opencv-python-headless==4.11.0.86
