@@ -1,9 +1,10 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) ||
-  (typeof process !== "undefined" && process.env?.REACT_APP_API_URL) ||
-  "http://localhost:5000";
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://smart-text-bot-backend-docker.onrender.com";
+
+console.log("API BASE URL:", API_BASE_URL);
 
 const STORAGE_KEY = "smarttextbot.auth";
 const AUTH_EVENT = "smarttextbot:auth-change";

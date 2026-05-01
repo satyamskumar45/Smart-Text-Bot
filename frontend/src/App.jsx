@@ -14,9 +14,8 @@ import Translate from "./pages/Translate";
 import "./style.css";
 
 const API_BASE_URL =
-  (typeof process !== "undefined" && process.env?.REACT_APP_API_URL) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) ||
-  "http://localhost:5000";
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://smart-text-bot-backend-docker.onrender.com";
 
 const navItems = [
   { to: "/dashboard", icon: "D", label: "Dashboard" },
