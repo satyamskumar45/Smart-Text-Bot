@@ -57,7 +57,7 @@ def save_history():
 
     return success({'record_id': record_id}, status_code=201)
 
-@history_bp.route('/history/<int:history_id>/favorite', methods=['PATCH'])
+@history_bp.route('/history/<history_id>/favorite', methods=['PATCH'])
 @jwt_required
 def favorite_history(history_id):
     payload = request.json or {}

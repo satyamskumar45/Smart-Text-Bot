@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from bson import ObjectId
@@ -14,47 +15,28 @@ def _utcnow():
 class HistoryModel:
     @classmethod
     def create_history(cls, user_id, payload):
-        db = get_db()
-        collection = db["history"]
-        now = _utcnow()
-        document = {
-            "user_id": user_id,
-            "feature": payload.get("feature", "general"),
-            "input_text": payload.get("input_text") or payload.get("text") or payload.get("message"),
-            "output_text": payload.get("output_text") or payload.get("response"),
-            "is_favorite": bool(payload.get("is_favorite", False)),
-            "metadata": payload.get("metadata", {}),
-            "created_at": now,
-            "updated_at": now,
-        }
-        result = collection.insert_one(document)
-        return serialize(collection.find_one({"_id": result.inserted_id}))
+        history_id = create_history_entry(
+            user_id=user_id,
+            guest_session_id=payload.get("guest_session_id"),
+            module_type=payload.get("module_type") or payload.get("feature", "general"),
+            input_text=payload.get("input_text") or payload.get("text") or payload.get("message") or payload.get("input"),
+            output_text=payload.get("output_text") or payload.get("response") or payload.get("output"),
+            metadata=payload.get("metadata"),
+            status=payload.get("status", "complete"),
+            favorite=payload.get("is_favorite", payload.get("favorite", False)),
+        )
+        return _serialize_history_document(_find_owned_history(history_id, user_id=user_id))
 
     @classmethod
     def list_history(cls, user_id, favorites_only=False, limit=100):
-        db = get_db()
-        collection = db["history"]
-        query = {"user_id": user_id}
-        if favorites_only:
-            query["is_favorite"] = True
-
-        cursor = collection.find(query).sort("created_at", -1).limit(limit)
-        return [serialize(item) for item in cursor]
+        return get_history_by_user(user_id=user_id, only_favorites=favorites_only, limit=limit)
 
     @classmethod
     def toggle_favorite(cls, history_id, user_id, is_favorite):
-        db = get_db()
-        collection = db["history"]
-        object_id = _safe_object_id(history_id)
-        if not object_id:
+        updated = set_history_favorite(history_id, is_favorite, user_id=user_id)
+        if not updated:
             return None
-
-        collection.update_one(
-            {"_id": object_id, "user_id": user_id},
-            {"$set": {"is_favorite": bool(is_favorite), "updated_at": _utcnow()}},
-        )
-        history = collection.find_one({"_id": object_id, "user_id": user_id})
-        return serialize(history)
+        return _serialize_history_document(_find_owned_history(history_id, user_id=user_id))
 
     @classmethod
     def delete_history(cls, history_id, user_id):
@@ -69,15 +51,13 @@ class HistoryModel:
 
     @classmethod
     def get_stats(cls, user_id):
-        db = get_db()
-        collection = db["history"]
-        items = list(collection.find({"user_id": user_id}))
+        items = get_history_by_user(user_id=user_id, limit=1000)
         feature_usage = {}
         favorite_count = 0
         for item in items:
-            feature = item.get("feature", "general")
+            feature = item.get("feature") or item.get("module_type") or "general"
             feature_usage[feature] = feature_usage.get(feature, 0) + 1
-            if item.get("is_favorite"):
+            if item.get("is_favorite") or item.get("favorite"):
                 favorite_count += 1
 
         return {
@@ -92,119 +72,157 @@ def _safe_object_id(value):
         return ObjectId(value)
     except (InvalidId, TypeError):
         return None
-=======
-from datetime import datetime
-import json
-from database.db import get_db
 
 
-def create_history_entry(user_id=None, guest_session_id=None, module_type=None, input_text=None, output_text=None, metadata=None, status='complete', favorite=False):
-    if not (user_id or guest_session_id):
-        raise ValueError('user_id or guest_session_id is required')
-
-    if not module_type:
-        raise ValueError('module_type is required')
-
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO history (user_id, guest_session_id, module_type, input_text, output_text, metadata, favorite, status, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-        (
-            user_id,
-            guest_session_id,
-            module_type,
-            input_text,
-            output_text,
-            metadata or '{}',
-            int(favorite),
-            status,
-            datetime.utcnow(),
-            datetime.utcnow(),
-        ),
-    )
-    history_id = cur.lastrowid
-    conn.commit()
-    cur.close()
-    conn.close()
-    return history_id
+def _coerce_metadata(metadata):
+    if isinstance(metadata, dict):
+        return metadata
+    if isinstance(metadata, str) and metadata.strip():
+        try:
+            return json.loads(metadata)
+        except json.JSONDecodeError:
+            return {"raw": metadata}
+    return {}
 
 
-def get_history_by_user(user_id=None, guest_session_id=None, module_type=None, only_favorites=False):
-    if not (user_id or guest_session_id):
-        return []
+def _serialize_history_document(document):
+    if not document:
+        return None
 
-    conn = get_db()
-    cur = conn.cursor(dictionary=True)
-    query = "SELECT id, user_id, guest_session_id, module_type, input_text, output_text, metadata, favorite, status, created_at FROM history WHERE "
-    conditions = []
-    params = []
+    item = serialize(document)
+    metadata = _coerce_metadata(item.get("metadata"))
+    item["metadata"] = metadata
 
+    feature = item.get("feature") or item.get("module_type") or "general"
+    item["feature"] = feature
+    item["module_type"] = item.get("module_type") or feature
+    item["input_text"] = item.get("input_text") or ""
+    item["output_text"] = item.get("output_text") or ""
+    item["input"] = item["input_text"]
+    item["output"] = item["output_text"]
+    item["favorite"] = bool(item.get("favorite", item.get("is_favorite", False)))
+    item["is_favorite"] = item["favorite"]
+    item["status"] = item.get("status", "complete")
+    return item
+
+
+def _history_query(user_id=None, guest_session_id=None, module_type=None, only_favorites=False):
+    query = {}
     if user_id:
-        conditions.append("user_id = %s")
-        params.append(user_id)
-    else:
-        conditions.append("guest_session_id = %s")
-        params.append(guest_session_id)
+        query["user_id"] = user_id
+    elif guest_session_id:
+        query["guest_session_id"] = guest_session_id
 
     if module_type:
-        conditions.append("module_type = %s")
-        params.append(module_type)
+        query["module_type"] = module_type
 
     if only_favorites:
-        conditions.append("favorite = 1")
+        query["$or"] = [{"favorite": True}, {"is_favorite": True}]
 
-    query += " AND ".join(conditions)
-    query += " ORDER BY created_at DESC LIMIT 200"
+    return query
 
-    cur.execute(query, tuple(params))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    for row in rows:
-        try:
-            row['metadata'] = json.loads(row.get('metadata') or '{}')
-        except Exception:
-            row['metadata'] = {}
-    return rows
+
+def _find_owned_history(history_id, user_id=None, guest_session_id=None):
+    db = get_db()
+    object_id = _safe_object_id(history_id)
+    if not object_id:
+        return None
+
+    query = {"_id": object_id}
+    if user_id:
+        query["user_id"] = user_id
+    elif guest_session_id:
+        query["guest_session_id"] = guest_session_id
+
+    return db["history"].find_one(query)
+
+
+def create_history_entry(
+    user_id=None,
+    guest_session_id=None,
+    module_type=None,
+    input_text=None,
+    output_text=None,
+    metadata=None,
+    status="complete",
+    favorite=False,
+):
+    db = get_db()
+    collection = db["history"]
+    now = _utcnow()
+    metadata_dict = _coerce_metadata(metadata)
+    feature = module_type or metadata_dict.get("feature") or "general"
+    document = {
+        "user_id": user_id,
+        "guest_session_id": guest_session_id,
+        "feature": feature,
+        "module_type": feature,
+        "input_text": input_text or "",
+        "output_text": output_text or "",
+        "metadata": metadata_dict,
+        "status": status,
+        "favorite": bool(favorite),
+        "is_favorite": bool(favorite),
+        "created_at": now,
+        "updated_at": now,
+    }
+    result = collection.insert_one(document)
+    return str(result.inserted_id)
+
+
+def get_history_by_user(user_id=None, guest_session_id=None, module_type=None, only_favorites=False, limit=200):
+    db = get_db()
+    query = _history_query(
+        user_id=user_id,
+        guest_session_id=guest_session_id,
+        module_type=module_type,
+        only_favorites=only_favorites,
+    )
+    cursor = db["history"].find(query).sort("created_at", -1).limit(limit)
+    return [_serialize_history_document(item) for item in cursor]
 
 
 def get_history_entry_owned(history_id, user_id=None, guest_session_id=None):
-    if not (user_id or guest_session_id):
+    history = _find_owned_history(history_id, user_id=user_id, guest_session_id=guest_session_id)
+    if not history:
         return None
-
-    conn = get_db()
-    cur = conn.cursor(dictionary=True)
-    if user_id:
-        cur.execute("SELECT id FROM history WHERE id = %s AND user_id = %s LIMIT 1", (history_id, user_id))
-    else:
-        cur.execute("SELECT id FROM history WHERE id = %s AND guest_session_id = %s LIMIT 1", (history_id, guest_session_id))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    return row
+    return {"id": str(history["_id"])}
 
 
 def set_history_favorite(history_id, favorite=True, user_id=None, guest_session_id=None):
-    if not get_history_entry_owned(history_id, user_id=user_id, guest_session_id=guest_session_id):
+    db = get_db()
+    object_id = _safe_object_id(history_id)
+    if not object_id:
         return False
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("UPDATE history SET favorite = %s, updated_at = %s WHERE id = %s", (int(favorite), datetime.utcnow(), history_id))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return True
+    query = {"_id": object_id}
+    if user_id:
+        query["user_id"] = user_id
+    elif guest_session_id:
+        query["guest_session_id"] = guest_session_id
+    else:
+        return False
+
+    result = db["history"].update_one(
+        query,
+        {
+            "$set": {
+                "favorite": bool(favorite),
+                "is_favorite": bool(favorite),
+                "updated_at": _utcnow(),
+            }
+        },
+    )
+    return result.matched_count > 0
 
 
 def attach_guest_history_to_user(guest_session_id, user_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE history SET user_id = %s, guest_session_id = NULL WHERE guest_session_id = %s",
-        (user_id, guest_session_id),
+    db = get_db()
+    db["history"].update_many(
+        {"guest_session_id": guest_session_id},
+        {
+            "$set": {"user_id": user_id, "updated_at": _utcnow()},
+            "$unset": {"guest_session_id": ""},
+        },
     )
-    conn.commit()
-    cur.close()
-    conn.close()
     return True

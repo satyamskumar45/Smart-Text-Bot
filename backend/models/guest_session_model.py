@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -19,6 +18,8 @@ class GuestSessionModel:
         document = {
             "session_id": str(uuid4()),
             "metadata": metadata or {},
+            "usage_counts": {},
+            "is_active": True,
             "created_at": now,
             "last_active_at": now,
         }
@@ -28,7 +29,12 @@ class GuestSessionModel:
     @classmethod
     def find_by_session_id(cls, session_id):
         db = get_db()
-        return serialize(db["guest_sessions"].find_one({"session_id": session_id}))
+        document = db["guest_sessions"].find_one({"session_id": session_id})
+        if not document:
+            return None
+        document.setdefault("usage_counts", {})
+        document.setdefault("is_active", True)
+        return serialize(document)
 
     @classmethod
     def touch_session(cls, session_id):
@@ -44,107 +50,65 @@ class GuestSessionModel:
         db = get_db()
         result = db["guest_sessions"].delete_one({"session_id": session_id})
         return result.deleted_count > 0
-=======
-from datetime import datetime, timedelta
-import uuid
-import json
-from database.db import get_db
 
 
-def create_guest_session():
-    session_id = uuid.uuid4().hex
-    now = datetime.utcnow()
-    expires_at = now + timedelta(hours=24)
-    usage_counts = json.dumps({
-        'translations': 0,
-        'summaries': 0,
-        'grammar': 0,
-        'writing': 0,
-        'language_quest': 0,
-        'sentiment': 0,
-        'pipeline': 0,
-    })
-
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO guest_sessions (session_id, usage_counts, created_at, expires_at, is_active) VALUES (%s, %s, %s, %s, TRUE)",
-        (session_id, usage_counts, now, expires_at),
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
-    return session_id
+def create_guest_session(metadata=None):
+    session = GuestSessionModel.create_session(metadata=metadata)
+    return session["session_id"]
 
 
 def get_guest_session(session_id):
-    conn = get_db()
-    cur = conn.cursor(dictionary=True)
-    cur.execute(
-        "SELECT id, session_id, usage_counts, converted_to_user_id, created_at, expires_at, is_active, last_used_at FROM guest_sessions WHERE session_id = %s AND is_active = TRUE", (session_id,))
-    session = cur.fetchone()
-    cur.close()
-    conn.close()
-    if not session:
-        return None
-    try:
-        session['usage_counts'] = json.loads(session['usage_counts'] or '{}')
-    except Exception:
-        session['usage_counts'] = {}
-    return session
+    return GuestSessionModel.find_by_session_id(session_id)
 
 
 def update_guest_usage(session_id, module_type):
-    guest = get_guest_session(session_id)
-    if not guest:
-        return False
-
-    usage_counts = guest['usage_counts']
-    usage_counts[module_type] = usage_counts.get(module_type, 0) + 1
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE guest_sessions SET usage_counts = %s, last_used_at = %s WHERE session_id = %s",
-        (json.dumps(usage_counts), datetime.utcnow(), session_id),
+    db = get_db()
+    now = _utcnow()
+    db["guest_sessions"].update_one(
+        {"session_id": session_id},
+        {
+            "$inc": {f"usage_counts.{module_type}": 1},
+            "$set": {"last_active_at": now},
+        },
     )
-    conn.commit()
-    cur.close()
-    conn.close()
-    return usage_counts
-
-
-def convert_guest_to_user(session_id, user_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE guest_sessions SET converted_to_user_id = %s, is_active = FALSE WHERE session_id = %s",
-        (user_id, session_id),
-    )
-    conn.commit()
-    attach_guest_history_to_user(session_id, user_id)
-    cur.close()
-    conn.close()
-    return True
+    return get_guest_session(session_id)
 
 
 def deactivate_guest_session(session_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("UPDATE guest_sessions SET is_active = FALSE WHERE session_id = %s", (session_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    db = get_db()
+    db["guest_sessions"].update_one(
+        {"session_id": session_id},
+        {"$set": {"is_active": False, "last_active_at": _utcnow()}},
+    )
     return True
 
 
 def attach_guest_history_to_user(guest_session_id, user_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE history SET user_id = %s, guest_session_id = NULL WHERE guest_session_id = %s",
-        (user_id, guest_session_id),
+    db = get_db()
+    db["history"].update_many(
+        {"guest_session_id": guest_session_id},
+        {
+            "$set": {
+                "user_id": user_id,
+                "updated_at": _utcnow(),
+            },
+            "$unset": {"guest_session_id": ""},
+        },
     )
-    conn.commit()
-    cur.close()
-    conn.close()
+    return True
+
+
+def convert_guest_to_user(session_id, user_id):
+    db = get_db()
+    db["guest_sessions"].update_one(
+        {"session_id": session_id},
+        {
+            "$set": {
+                "linked_user_id": user_id,
+                "is_active": False,
+                "last_active_at": _utcnow(),
+            }
+        },
+    )
+    attach_guest_history_to_user(session_id, user_id)
     return True

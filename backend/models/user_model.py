@@ -72,8 +72,11 @@ class UserModel:
         db = get_db()
         collection = db["users"]
         now = _utcnow()
+        object_id = _safe_object_id(user_id)
+        if not object_id:
+            return
         collection.update_one(
-            {"_id": _safe_object_id(user_id)},
+            {"_id": object_id},
             {"$set": {"last_login_at": now, "updated_at": now}},
         )
 
@@ -83,16 +86,18 @@ class UserModel:
         collection = db["users"]
         now = _utcnow()
         today = now.date().isoformat()
-        user = collection.find_one({"_id": _safe_object_id(user_id)})
+        object_id = _safe_object_id(user_id)
+        if not object_id:
+            return None
+
+        user = collection.find_one({"_id": object_id})
         if not user:
             return None
 
         previous = user.get("streak_last_date")
         streak_count = user.get("streak_count", 0)
 
-        if previous == today:
-            pass
-        else:
+        if previous != today:
             if previous:
                 previous_date = datetime.fromisoformat(previous).date()
                 delta_days = (now.date() - previous_date).days
@@ -125,52 +130,36 @@ def _safe_object_id(value):
         return ObjectId(value)
     except (InvalidId, TypeError):
         return None
-=======
-from datetime import datetime
-from database.db import get_db
+
+
+def _legacy_user_payload(user):
+    if not user:
+        return None
+    return {
+        "id": user["id"],
+        "email": user.get("email"),
+        "password_hash": user.get("password"),
+        "display_name": user.get("name") or "",
+        "role": "guest" if user.get("is_guest") else "user",
+        "is_active": True,
+        "created_at": user.get("created_at"),
+        "updated_at": user.get("updated_at"),
+    }
 
 
 def get_user_by_email(email):
-    conn = get_db()
-    cur = conn.cursor(dictionary=True)
-    cur.execute("SELECT id, email, password_hash, display_name, role, is_active, created_at, updated_at FROM users WHERE email = %s", (email,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
-    return user
+    return _legacy_user_payload(UserModel.find_by_email(email, include_password=True))
 
 
 def get_user_by_id(user_id):
-    conn = get_db()
-    cur = conn.cursor(dictionary=True)
-    cur.execute("SELECT id, email, display_name, role, is_active, created_at, updated_at FROM users WHERE id = %s", (user_id,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
-    return user
+    return _legacy_user_payload(UserModel.find_by_id(str(user_id), include_password=True))
 
 
 def create_user(email, password_hash, display_name=None):
-    now = datetime.utcnow()
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (email, password_hash, display_name, role, is_active, created_at, updated_at) VALUES (%s, %s, %s, 'user', TRUE, %s, %s)",
-        (email, password_hash, display_name or '', now, now),
-    )
-    user_id = cur.lastrowid
-    conn.commit()
-    cur.close()
-    conn.close()
-    return user_id
+    user = UserModel.create_user(email=email, password_hash=password_hash, name=display_name)
+    return user["id"] if user else None
 
 
 def update_user_last_active(user_id):
-    now = datetime.utcnow()
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("UPDATE users SET updated_at = %s WHERE id = %s", (now, user_id))
-    conn.commit()
-    cur.close()
-    conn.close()
+    UserModel.touch_login(str(user_id))
     return True

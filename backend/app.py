@@ -22,13 +22,11 @@ def create_app():
         if origin.strip()
     ]
 
-    if not frontend_origins:
-        raise RuntimeError("FRONTEND_ORIGINS environment variable is required.")
-
+    cors_origins = frontend_origins if frontend_origins else "*"
     CORS(
         app,
-        resources={r"/*": {"origins": frontend_origins}},
-        supports_credentials=True,
+        resources={r"/*": {"origins": cors_origins}},
+        supports_credentials=bool(frontend_origins),
     )
 
     try:

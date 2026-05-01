@@ -1,16 +1,16 @@
 """Backend application settings loaded from environment variables."""
 
+import json
 import os
 import platform
 from pathlib import Path
-from dotenv import load_dotenv
-from core.exceptions import ConfigurationError
-import json
 
-# Load environment variables
+from dotenv import load_dotenv
+
+from core.exceptions import ConfigurationError
+
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
-print(f"[ENV LOAD] loading backend environment from: {env_path}")
 
 
 def load_supported_languages():
@@ -22,26 +22,17 @@ def load_supported_languages():
             languages_list = json.load(f)
         return {entry["code"].lower(): entry["name"] for entry in languages_list}
     except Exception as exc:
-        raise ConfigurationError(
-            f"Unable to load supported languages from {languages_path}: {exc}"
-        )
+        raise ConfigurationError(f"Unable to load supported languages: {exc}")
 
 
 class Settings:
-    DB_HOST = os.getenv("DB_HOST", "localhost")
-    DB_USER = os.getenv("DB_USER", "root")
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-    DB_NAME = os.getenv("DB_NAME", "smarttextbot")
-    DB_POOL_NAME = os.getenv("DB_POOL_NAME", "smarttextbot_pool")
-    DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
-    DB_CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", "8"))
     TESSERACT_PATH = os.getenv("TESSERACT_PATH", "").strip()
     TESSERACT_WINDOWS_FALLBACK = os.getenv(
         "TESSERACT_WINDOWS_FALLBACK",
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
     ).strip()
 
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "replace-with-secure-secret")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
     JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRES_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRES_MINUTES", "15"))
     REFRESH_TOKEN_EXPIRES_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRES_DAYS", "7"))
@@ -57,21 +48,9 @@ class Settings:
     SUPPORTED_LANGUAGES = load_supported_languages()
 
     @classmethod
-    def validate(cls):
-        if not cls.DB_HOST or not cls.DB_USER or not cls.DB_NAME:
-            raise ConfigurationError("Database configuration is required.")
-        if not cls.JWT_SECRET_KEY or cls.JWT_SECRET_KEY == "replace-with-secure-secret":
-            raise ConfigurationError("A strong JWT_SECRET_KEY must be set in environment variables.")
-        if os.getenv("FLASK_ENV", "development") != "production":
-            print(f"[DB SETTINGS] DB_HOST={cls.DB_HOST} DB_USER={cls.DB_USER} DB_NAME={cls.DB_NAME}")
-
-    @classmethod
     def get_language_name(cls, code: str) -> str:
         return cls.SUPPORTED_LANGUAGES.get(code.lower(), code.upper())
 
     @classmethod
     def is_windows(cls) -> bool:
         return platform.system().lower() == "windows"
-
-
-Settings.validate()
