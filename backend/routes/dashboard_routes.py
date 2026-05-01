@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 from flask import Blueprint, g, jsonify, request
 
 from models.history_model import HistoryModel

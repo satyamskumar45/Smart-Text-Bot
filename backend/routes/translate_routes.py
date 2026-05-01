@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 from flask import Blueprint,request,jsonify
 from deep_translator import GoogleTranslator
 

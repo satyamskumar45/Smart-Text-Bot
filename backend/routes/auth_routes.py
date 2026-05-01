@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from flask import Blueprint, g, jsonify, request
 import bcrypt
 import jwt

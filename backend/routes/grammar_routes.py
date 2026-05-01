@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 from flask import Blueprint,request,jsonify
 import language_tool_python
 
