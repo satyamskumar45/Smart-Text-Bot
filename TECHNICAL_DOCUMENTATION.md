@@ -60,7 +60,7 @@ On failure:
 
 Frontend calls use `frontend/src/services/api.js`, which includes:
 
-- `baseURL` from `VITE_API_BASE_URL` or `http://127.0.0.1:5000`
+- `baseURL` from `VITE_API_BASE_URL` or `https://smart-text-bot-backend-docker.onrender.com`
 - `timeout: 25000`
 - Request logging
 - Response interceptor that unwraps `data` when `success` is true

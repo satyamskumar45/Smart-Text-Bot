@@ -126,17 +126,17 @@
 
   "curl_examples": {
     "example_1_basic": {
-      "command": "curl -X POST http://localhost:5000/translate -H \"Content-Type: application/json\" -d '{\"text\": \"Hello\", \"target_lang\": \"Hindi\"}'",
+      "command": "curl -X POST https://smart-text-bot-backend-docker.onrender.com/translate -H \"Content-Type: application/json\" -d '{\"text\": \"Hello\", \"target_lang\": \"Hindi\"}'",
       "description": "Basic translation request"
     },
     
     "example_2_with_source": {
-      "command": "curl -X POST http://localhost:5000/translate -H \"Content-Type: application/json\" -d '{\"text\": \"Bonjour\", \"target_lang\": \"English\", \"source_lang\": \"French\"}'",
+      "command": "curl -X POST https://smart-text-bot-backend-docker.onrender.com/translate -H \"Content-Type: application/json\" -d '{\"text\": \"Bonjour\", \"target_lang\": \"English\", \"source_lang\": \"French\"}'",
       "description": "Translation with source language specified"
     },
     
     "example_3_explain": {
-      "command": "curl -X POST http://localhost:5000/explain -H \"Content-Type: application/json\" -d '{\"original\": \"Hello\", \"translation\": \"नमस्ते\"}'",
+      "command": "curl -X POST https://smart-text-bot-backend-docker.onrender.com/explain -H \"Content-Type: application/json\" -d '{\"original\": \"Hello\", \"translation\": \"नमस्ते\"}'",
       "description": "Get translation explanation"
     }
   },
@@ -148,7 +148,7 @@
     },
     
     "example_2_with_requests": {
-      "code": "import requests\n\nresponse = requests.post('http://localhost:5000/translate', json={\n    'text': 'Hello',\n    'target_lang': 'Spanish'\n})\n\nprint(response.json())",
+      "code": "import requests\n\nresponse = requests.post('https://smart-text-bot-backend-docker.onrender.com/translate', json={\n    'text': 'Hello',\n    'target_lang': 'Spanish'\n})\n\nprint(response.json())",
       "description": "Use requests library to call API"
     },
     

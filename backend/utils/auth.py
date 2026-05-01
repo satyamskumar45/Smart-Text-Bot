@@ -1,4 +1,3 @@
-import os
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -6,12 +5,13 @@ from functools import wraps
 import jwt
 from flask import g, jsonify, request
 
+from config.settings import Settings
 from models.user_model import UserModel
 
 
-JWT_ALGORITHM = "HS256"
-ACCESS_TTL_MINUTES = int(os.getenv("JWT_ACCESS_TTL_MINUTES", "15"))
-REFRESH_TTL_DAYS = int(os.getenv("JWT_REFRESH_TTL_DAYS", "30"))
+JWT_ALGORITHM = Settings.JWT_ALGORITHM or "HS256"
+ACCESS_TTL_MINUTES = Settings.ACCESS_TOKEN_EXPIRES_MINUTES
+REFRESH_TTL_DAYS = Settings.REFRESH_TOKEN_EXPIRES_DAYS
 
 
 def _utcnow():
@@ -19,9 +19,9 @@ def _utcnow():
 
 
 def _get_jwt_secret():
-    secret = os.getenv("JWT_SECRET_KEY")
+    secret = getattr(Settings, "JWT_SECRET_KEY", None)
     if not secret:
-        raise RuntimeError("JWT_SECRET_KEY environment variable is required.")
+        raise RuntimeError("JWT_SECRET_KEY is not configured. Set JWT_SECRET_KEY in Render environment variables.")
     return secret
 
 

@@ -41,6 +41,18 @@ def _validate_required_settings():
 
 def create_app():
     _validate_required_settings()
+    # Configure logging early so errors surface in Render logs
+    import logging
+
+    level = getattr(Settings, "LOG_LEVEL", "INFO")
+    numeric_level = getattr(logging, level.upper(), logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setLevel(numeric_level)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    handler.setFormatter(formatter)
+    logging.root.setLevel(numeric_level)
+    logging.root.addHandler(handler)
+
     init_db()
 
     app = Flask(__name__)

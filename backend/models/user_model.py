@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any, Dict
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -154,6 +155,53 @@ def _legacy_user_payload(user):
         "is_active": True,
         "created_at": user.get("created_at"),
         "updated_at": user.get("updated_at"),
+    }
+
+
+def serialize_user(user: Any) -> Dict:
+    """Return minimal, JSON-serializable user payload for API responses.
+
+    This matches the production-safe shape the frontend expects and
+    ensures ObjectId and datetime fields are converted to strings.
+    """
+    if not user:
+        return None
+
+    # id could be in `_id` (raw mongo doc) or already in `id`
+    raw_id = None
+    if isinstance(user, dict):
+        raw_id = user.get("_id") or user.get("id")
+    else:
+        try:
+            u = dict(user)
+            raw_id = u.get("_id") or u.get("id")
+        except Exception:
+            raw_id = None
+
+    created_at = None
+    if isinstance(user, dict):
+        created_at = user.get("created_at")
+
+    # convert created_at to isoformat if it's a datetime
+    try:
+        from datetime import datetime
+
+        if isinstance(created_at, datetime):
+            created_at_iso = created_at.isoformat()
+        else:
+            created_at_iso = created_at if isinstance(created_at, str) else None
+    except Exception:
+        created_at_iso = None
+
+    role = None
+    if isinstance(user, dict):
+        role = user.get("role")
+
+    return {
+        "id": str(raw_id) if raw_id is not None else None,
+        "email": user.get("email") if isinstance(user, dict) else None,
+        "role": role or ("guest" if (isinstance(user, dict) and user.get("is_guest")) else "user"),
+        "created_at": created_at_iso,
     }
 
 
