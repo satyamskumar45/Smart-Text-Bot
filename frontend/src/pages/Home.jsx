@@ -4,7 +4,7 @@ const features = [
   {
     to: "/chat",
     color: "teal",
-    icon: "◈",
+    icon: "💬",
     title: "AI Chat",
     desc: "Natural language conversations powered by GPT. Ask anything, get intelligent answers in real time.",
   },
@@ -18,19 +18,17 @@ const features = [
   {
     to: "/sentiment",
     color: "amber",
-    icon: "◉",
+    icon: "●",
     title: "Sentiment Analysis",
     desc: "Analyze tone and emotion in any text. Get positive, negative, and neutral confidence scores.",
   },
-    {
+  {
     to: "/summarize",
     color: "purple",
     icon: "📝",
     title: "Text Summarizer",
     desc: "Generate concise summaries from long text using AI in seconds.",
   },
-
-  // ✅ NEW FEATURE
   {
     to: "/image-scan",
     color: "pink",
@@ -49,7 +47,8 @@ export default function Home() {
       </div>
 
       <h1 className="hero-title">
-        Language intelligence,<br />
+        Language intelligence,
+        <br />
         <span className="gradient-text">built for developers</span>
       </h1>
 
@@ -59,11 +58,11 @@ export default function Home() {
       </p>
 
       <div className="feature-grid">
-        {features.map((f) => (
-          <Link key={f.to} to={f.to} className={`feature-card ${f.color}`}>
-            <div className="feature-icon">{f.icon}</div>
-            <div className="feature-title">{f.title}</div>
-            <div className="feature-desc">{f.desc}</div>
+        {features.map((feature) => (
+          <Link key={feature.to} to={feature.to} className={`feature-card ${feature.color}`}>
+            <div className="feature-icon">{feature.icon}</div>
+            <div className="feature-title">{feature.title}</div>
+            <div className="feature-desc">{feature.desc}</div>
             <div className="feature-arrow">→</div>
           </Link>
         ))}

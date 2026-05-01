@@ -1,4 +1,5 @@
 import os
+<<<<<<< HEAD
 from threading import Lock
 
 from pymongo import ASCENDING, MongoClient
@@ -70,3 +71,63 @@ def _ensure_indexes(db):
     db.history.create_index([("user_id", ASCENDING), ("created_at", ASCENDING)])
     db.guest_sessions.create_index([("session_id", ASCENDING)], unique=True)
     db.progress.create_index([("user_id", ASCENDING), ("module", ASCENDING)], unique=True)
+=======
+import mysql.connector
+from mysql.connector import pooling, Error as MySQLError
+from config.settings import Settings
+
+_db_pool = None
+
+
+def get_db():
+    global _db_pool
+
+    if _db_pool is None:
+        print(
+            f"[DB CONNECT] creating connection pool with "
+            f"host={Settings.DB_HOST}, "
+            f"port={os.getenv('DB_PORT', '3306')}, "
+            f"user={Settings.DB_USER}, "
+            f"database={Settings.DB_NAME}"
+        )
+
+        try:
+            _db_pool = mysql.connector.pooling.MySQLConnectionPool(
+                pool_name=Settings.DB_POOL_NAME,
+                pool_size=Settings.DB_POOL_SIZE,
+                host=Settings.DB_HOST,
+                port=int(os.getenv("DB_PORT", "3306")),
+                user=Settings.DB_USER,
+                password=Settings.DB_PASSWORD,
+                database=Settings.DB_NAME,
+                connection_timeout=Settings.DB_CONNECT_TIMEOUT,
+                charset="utf8mb4",
+                use_unicode=True,
+                autocommit=False,
+            )
+
+        except MySQLError as exc:
+            msg = "Database connection failed"
+
+            if exc.errno == 1045:
+                msg = "Database connection failed: invalid MySQL credentials"
+
+            elif exc.errno == 1049:
+                msg = "Database connection failed: unknown database"
+
+            elif exc.errno == 2003:
+                msg = "Database connection failed: unable to reach MySQL server"
+
+            print(f"[DB CONNECT ERROR] {msg} ({exc.errno}): {exc.msg}")
+            raise RuntimeError(msg) from exc
+
+    try:
+        connection = _db_pool.get_connection()
+        if not connection.is_connected():
+            connection.reconnect(attempts=1, delay=0)
+        return connection
+
+    except MySQLError as exc:
+        print(f"[DB CONNECTION ERROR] failed to get connection from pool: {exc}")
+        raise RuntimeError("Database connection failed") from exc
+>>>>>>> 7a39e76952f1835cf7031449b83138e654424a73

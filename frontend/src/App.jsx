@@ -1,18 +1,22 @@
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
-import Home from "./pages/Home";
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import Chat from "./pages/Chat";
-import Translate from "./pages/Translate";
+import Home from "./pages/Home";
+import ImageScanner from "./pages/ImageScanner";
 import Sentiment from "./pages/Sentiment";
 import Summarizer from "./pages/Summarizer";
-import ImageScanner from "./pages/ImageScanner";
+import Translate from "./pages/Translate";
 import "./style.css";
+
+const API_BASE_URL =
+  (typeof process !== "undefined" && process.env?.REACT_APP_API_URL) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) ||
+  "http://localhost:5000";
 
 const navItems = [
   { to: "/", icon: "⌂", label: "Overview", exact: true },
-  { to: "/chat", icon: "◈", label: "AI Chat" },
+  { to: "/chat", icon: "💬", label: "AI Chat" },
   { to: "/translate", icon: "⇄", label: "Translate" },
-  { to: "/sentiment", icon: "◉", label: "Sentiment" },
-   // ✅ ADD THESE
+  { to: "/sentiment", icon: "●", label: "Sentiment" },
   { to: "/summarize", icon: "📝", label: "Summarizer" },
   { to: "/image-scan", icon: "🖼️", label: "Image Scanner" },
 ];
@@ -22,7 +26,6 @@ const pageTitles = {
   "/chat": "AI Chat",
   "/translate": "Translation",
   "/sentiment": "Sentiment Analysis",
-   // ✅ ADD THESE
   "/summarize": "Text Summarizer",
   "/image-scan": "Image Scanner",
 };
@@ -56,7 +59,9 @@ function Sidebar() {
       <div className="sidebar-footer">
         <div className="status-badge">
           <div className="status-dot" />
-          <span className="status-text">API <span>Connected</span></span>
+          <span className="status-text">
+            API <span>Connected</span>
+          </span>
         </div>
       </div>
     </aside>
@@ -66,13 +71,14 @@ function Sidebar() {
 function Topbar() {
   const location = useLocation();
   const title = pageTitles[location.pathname] || "SmartTextBot";
+
   return (
     <header className="topbar">
       <span className="topbar-title">{title}</span>
       <div className="topbar-meta">
-        <span className="model-badge">GPT-3.5</span>
+        <span className="model-badge">API</span>
         <span>·</span>
-        <span>localhost:5000</span>
+        <span>{API_BASE_URL}</span>
       </div>
     </header>
   );

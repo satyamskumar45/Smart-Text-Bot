@@ -17,12 +17,15 @@ export default function Translate() {
   };
 
   const run = async () => {
-    if (!input.trim()) return;
+    if (!input.trim()) {
+      return;
+    }
+
     setLoading(true);
     setOutput("");
     try {
-      const r = await translate(input, fromLang, toLang);
-      setOutput(r.data.translated);
+      const data = await translate(input, fromLang, toLang);
+      setOutput(data.translation || data.translated || "");
     } catch {
       setOutput("⚠ Translation failed. Is the backend running?");
     } finally {
@@ -31,7 +34,9 @@ export default function Translate() {
   };
 
   const copy = async () => {
-    if (!output) return;
+    if (!output) {
+      return;
+    }
     await navigator.clipboard.writeText(output);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -45,7 +50,6 @@ export default function Translate() {
       </div>
 
       <div className="card">
-        {/* Header */}
         <div className="card-header">
           <div className="card-title">
             <span className="card-title-icon">⇄</span>
@@ -57,12 +61,11 @@ export default function Translate() {
           </div>
         </div>
 
-        {/* Lang Selector */}
         <div className="lang-row">
           <input
             className="lang-select"
             value={fromLang}
-            onChange={(e) => setFromLang(e.target.value)}
+            onChange={(event) => setFromLang(event.target.value)}
             placeholder="From (e.g. en)"
           />
           <button className="swap-btn" onClick={swap} title="Swap languages">
@@ -71,20 +74,19 @@ export default function Translate() {
           <input
             className="lang-select"
             value={toLang}
-            onChange={(e) => setToLang(e.target.value)}
+            onChange={(event) => setToLang(event.target.value)}
             placeholder="To (e.g. hi)"
           />
         </div>
 
-        {/* Dual text area */}
         <div className="dual-area">
           <div className="dual-pane">
             <div className="dual-pane-label">Source · {fromLang.toUpperCase()}</div>
             <textarea
               className="textarea-main"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Enter text to translate…"
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Enter text to translate..."
             />
           </div>
           <div className="dual-area-divider" />
@@ -94,25 +96,20 @@ export default function Translate() {
               className="textarea-output"
               value={output}
               readOnly
-              placeholder={loading ? "Translating…" : "Translation will appear here…"}
+              placeholder={loading ? "Translating..." : "Translation will appear here..."}
             />
           </div>
         </div>
 
-        {/* Actions */}
         <div className="action-row">
           <button className="btn btn-ghost btn-icon" onClick={copy} title="Copy translation">
             {copied ? "✓" : "⎘"}
           </button>
           <div className="spacer" />
-          <button
-            className="btn btn-primary"
-            onClick={run}
-            disabled={loading || !input.trim()}
-          >
+          <button className="btn btn-primary" onClick={run} disabled={loading || !input.trim()}>
             {loading ? (
               <>
-                <div className="spinner" /> Translating…
+                <div className="spinner" /> Translating...
               </>
             ) : (
               <>🚀 Translate</>

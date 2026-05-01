@@ -4,7 +4,7 @@ import { sentiment } from "../services/api";
 const VERDICTS = {
   positive: { emoji: "😊", label: "Positive", color: "#4cde9c" },
   negative: { emoji: "😞", label: "Negative", color: "#ff5b6a" },
-  neutral:  { emoji: "😐", label: "Neutral",  color: "#4f8ef7" },
+  neutral: { emoji: "😐", label: "Neutral", color: "#4f8ef7" },
 };
 
 export default function Sentiment() {
@@ -13,31 +13,35 @@ export default function Sentiment() {
   const [loading, setLoading] = useState(false);
 
   const run = async () => {
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      return;
+    }
+
     setLoading(true);
     try {
-      const r = await sentiment(text);
-      // Normalize result — backend may return { sentiment: "positive" } or { positive: 0.8, … }
-      const raw = r.data;
+      const raw = await sentiment(text);
       if (raw.positive !== undefined) {
-        // Numeric scores provided
         const total = (raw.positive || 0) + (raw.negative || 0) + (raw.neutral || 0) || 1;
         setResult({
           positive: Math.round((raw.positive / total) * 100),
           negative: Math.round((raw.negative / total) * 100),
           neutral: Math.round((raw.neutral / total) * 100),
-          verdict: raw.sentiment || Object.keys({ positive: raw.positive, negative: raw.negative, neutral: raw.neutral }).reduce((a, b) => raw[a] > raw[b] ? a : b),
+          verdict:
+            raw.sentiment ||
+            Object.keys({
+              positive: raw.positive,
+              negative: raw.negative,
+              neutral: raw.neutral,
+            }).reduce((a, b) => (raw[a] > raw[b] ? a : b)),
         });
       } else {
-        // Only label provided — give a mock distribution
         const label = (raw.sentiment || "neutral").toLowerCase();
-        const mock = {
+        setResult({
           positive: label === "positive" ? 78 : label === "negative" ? 8 : 34,
           negative: label === "negative" ? 74 : label === "positive" ? 6 : 18,
-          neutral:  label === "neutral"  ? 70 : 16,
+          neutral: label === "neutral" ? 70 : 16,
           verdict: label,
-        };
-        setResult(mock);
+        });
       }
     } catch {
       setResult(null);
@@ -47,11 +51,10 @@ export default function Sentiment() {
   };
 
   const verdict = result ? VERDICTS[result.verdict] || VERDICTS.neutral : null;
-
   const bars = [
     { key: "positive", label: "Positive", cls: "positive", dot: "#4cde9c" },
     { key: "negative", label: "Negative", cls: "negative", dot: "#ff5b6a" },
-    { key: "neutral",  label: "Neutral",  cls: "neutral",  dot: "#4f8ef7" },
+    { key: "neutral", label: "Neutral", cls: "neutral", dot: "#4f8ef7" },
   ];
 
   return (
@@ -64,7 +67,7 @@ export default function Sentiment() {
       <div className="card">
         <div className="card-header">
           <div className="card-title">
-            <span className="card-title-icon">◉</span>
+            <span className="card-title-icon">●</span>
             Sentiment Analyzer
           </div>
           {result && verdict && (
@@ -75,7 +78,6 @@ export default function Sentiment() {
         </div>
 
         <div className="sentiment-layout">
-          {/* Input Pane */}
           <div className="sentiment-input-pane">
             <div>
               <label className="input-label">Text to Analyze</label>
@@ -83,33 +85,28 @@ export default function Sentiment() {
                 className="textarea-main"
                 style={{ height: 180 }}
                 value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Paste or type any text — a review, tweet, message, or article…"
+                onChange={(event) => setText(event.target.value)}
+                placeholder="Paste or type any text — a review, tweet, message, or article..."
               />
             </div>
 
-            <button
-              className="btn btn-primary btn-full"
-              onClick={run}
-              disabled={loading || !text.trim()}
-            >
+            <button className="btn btn-primary btn-full" onClick={run} disabled={loading || !text.trim()}>
               {loading ? (
-                <><div className="spinner" /> Analyzing…</>
+                <>
+                  <div className="spinner" /> Analyzing...
+                </>
               ) : (
-                <>◉ Analyze Sentiment</>
+                <>● Analyze Sentiment</>
               )}
             </button>
 
             <div style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5 }}>
-              The model classifies text as positive, negative, or neutral and returns
-              a confidence score for each category.
+              The model classifies text as positive, negative, or neutral and returns a confidence score for each category.
             </div>
           </div>
 
-          {/* Divider */}
           <div className="sentiment-divider" />
 
-          {/* Result Pane */}
           <div className="sentiment-result-pane">
             <div className="result-header">Analysis Results</div>
 
@@ -121,45 +118,42 @@ export default function Sentiment() {
                     <div className="verdict-label" style={{ color: verdict.color }}>
                       {verdict.label}
                     </div>
-                    <div className="verdict-score">
-                      Overall sentiment · {result[result.verdict]}% confidence
-                    </div>
+                    <div className="verdict-score">Overall sentiment · {result[result.verdict]}% confidence</div>
                   </div>
                 </div>
 
                 <div className="sentiment-bar-group">
-                  {bars.map((b) => (
-                    <div key={b.key} className="sentiment-bar-item">
+                  {bars.map((bar) => (
+                    <div key={bar.key} className="sentiment-bar-item">
                       <div className="bar-meta">
                         <div className="bar-label">
-                          <div className="bar-dot" style={{ background: b.dot }} />
-                          {b.label}
+                          <div className="bar-dot" style={{ background: bar.dot }} />
+                          {bar.label}
                         </div>
-                        <div className="bar-pct">{result[b.key]}%</div>
+                        <div className="bar-pct">{result[bar.key]}%</div>
                       </div>
                       <div className="progress-track">
-                        <div
-                          className={`progress-fill ${b.cls}`}
-                          style={{ width: `${result[b.key]}%` }}
-                        />
+                        <div className={`progress-fill ${bar.cls}`} style={{ width: `${result[bar.key]}%` }} />
                       </div>
                     </div>
                   ))}
                 </div>
               </>
             ) : (
-              <div style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: "48px 24px",
-                color: "var(--text-3)",
-                textAlign: "center",
-              }}>
-                <div style={{ fontSize: 32, opacity: 0.3 }}>◉</div>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "48px 24px",
+                  color: "var(--text-3)",
+                  textAlign: "center",
+                }}
+              >
+                <div style={{ fontSize: 32, opacity: 0.3 }}>●</div>
                 <div style={{ fontSize: 14, color: "var(--text-2)" }}>No analysis yet</div>
                 <div style={{ fontSize: 13, lineHeight: 1.5, maxWidth: 220 }}>
                   Enter some text and click Analyze to see sentiment scores.
