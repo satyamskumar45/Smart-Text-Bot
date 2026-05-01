@@ -208,4 +208,3 @@ def attach_guest_history_to_user(guest_session_id, user_id):
     cur.close()
     conn.close()
     return True
->>>>>>> 7a39e76952f1835cf7031449b83138e654424a73

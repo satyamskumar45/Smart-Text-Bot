@@ -111,4 +111,3 @@ def purge_expired_tokens():
     cur.close()
     conn.close()
     return True
->>>>>>> 7a39e76952f1835cf7031449b83138e654424a73

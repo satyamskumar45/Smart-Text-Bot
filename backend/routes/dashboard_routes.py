@@ -127,4 +127,3 @@ def dashboard():
         return error('Unable to load dashboard', 500)
 
     return success(data)
->>>>>>> 7a39e76952f1835cf7031449b83138e654424a73

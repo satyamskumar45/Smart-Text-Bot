@@ -110,6 +110,3 @@ def grammar():
     except Exception as e:
         print(f"[ERROR] Grammar processing failed: {str(e)}")
         return error(f"Grammar processing failed: {str(e)}", 500)
-
-
->>>>>>> 7a39e76952f1835cf7031449b83138e654424a73

@@ -7,7 +7,6 @@ PyJWT==2.12.1
 Pillow==12.2.0
 language-tool-python==3.3.0
 gtts==2.5.4
-mysql-connector-python==9.6.0
 bcrypt==5.0.0
 pytesseract==0.3.13
 httpx==0.28.1
