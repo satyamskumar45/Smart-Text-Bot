@@ -1,0 +1,10 @@
+flask
+flask-cors
+bcrypt
+pyjwt
+pymongo
+deep-translator
+language-tool-python
+gTTS
+dnspython
+gunicorn
