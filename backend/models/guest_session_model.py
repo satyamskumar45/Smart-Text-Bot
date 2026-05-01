@@ -112,3 +112,9 @@ def convert_guest_to_user(session_id, user_id):
     )
     attach_guest_history_to_user(session_id, user_id)
     return True
+
+
+def delete_guest_sessions_for_user(user_id):
+    db = get_db()
+    result = db["guest_sessions"].delete_many({"linked_user_id": user_id})
+    return result.deleted_count

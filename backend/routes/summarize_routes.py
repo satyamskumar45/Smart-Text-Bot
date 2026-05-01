@@ -77,8 +77,8 @@ def summarize():
         current = getattr(g, 'current_user', None)
         if current:
             save_history_entry(
-                user_id=current.get('id') if current.get('role') == 'user' else None,
-                guest_session_id=current.get('guest_session_id') if current.get('role') == 'guest' else None,
+                user_id=current.get('id'),
+                guest_session_id=current.get('guest_session_id'),
                 module_type='summary',
                 input_text=text,
                 output_text=summary_data['summary'],
@@ -89,11 +89,9 @@ def summarize():
                     'document_name': filename,
                 }),
             )
-            if current.get('role') == 'guest':
+            if current.get('guest_session_id'):
                 track_guest_usage(current.get('guest_session_id'), 'summaries')
         
-        print(f"[SUMMARIZE] Summarized text, generated {len(summary_data['bullets'])} bullet points")
         return success(summary_data)
-    except Exception as e:
-        print(f"[ERROR] Summarization failed: {str(e)}")
-        return error(f"Summarization failed: {str(e)}", 500)
+    except Exception as exc:
+        return error(f"Summarization failed: {exc}", 500)

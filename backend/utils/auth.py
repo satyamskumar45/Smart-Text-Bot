@@ -25,20 +25,40 @@ def _get_jwt_secret():
     return secret
 
 
-def create_access_token(user_id):
+def _build_user_claims(user_or_id, email=None, role=None):
+    if isinstance(user_or_id, dict):
+        user_id = user_or_id.get("id") or user_or_id.get("_id") or user_or_id.get("sub")
+        user_email = user_or_id.get("email")
+        user_role = user_or_id.get("role") or ("guest" if user_or_id.get("is_guest") else "user")
+    else:
+        user_id = user_or_id
+        user_email = email
+        user_role = role or "user"
+
+    return {
+        "sub": str(user_id),
+        "user_id": str(user_id),
+        "email": user_email,
+        "role": user_role,
+    }
+
+
+def create_access_token(user_or_id, email=None, role=None):
     expires_at = _utcnow() + timedelta(minutes=ACCESS_TTL_MINUTES)
+    claims = _build_user_claims(user_or_id, email=email, role=role)
     token = jwt.encode(
-        {"sub": user_id, "type": "access", "exp": expires_at, "iat": _utcnow(), "jti": str(uuid4())},
+        {**claims, "type": "access", "exp": expires_at, "iat": _utcnow(), "jti": str(uuid4())},
         _get_jwt_secret(),
         algorithm=JWT_ALGORITHM,
     )
     return token, expires_at
 
 
-def create_refresh_token(user_id):
+def create_refresh_token(user_or_id, email=None, role=None):
     expires_at = _utcnow() + timedelta(days=REFRESH_TTL_DAYS)
+    claims = _build_user_claims(user_or_id, email=email, role=role)
     token = jwt.encode(
-        {"sub": user_id, "type": "refresh", "exp": expires_at, "iat": _utcnow(), "jti": str(uuid4())},
+        {**claims, "type": "refresh", "exp": expires_at, "iat": _utcnow(), "jti": str(uuid4())},
         _get_jwt_secret(),
         algorithm=JWT_ALGORITHM,
     )
@@ -80,3 +100,22 @@ def auth_required(route_handler):
         return route_handler(*args, **kwargs)
 
     return wrapper
+
+
+def require_role(expected_role):
+    def decorator(route_handler):
+        @wraps(route_handler)
+        def wrapper(*args, **kwargs):
+            current_user = getattr(g, "current_user", None)
+            if not current_user:
+                return jsonify({"status": "fail", "message": "Authentication required."}), 401
+
+            current_role = current_user.get("role") or ("guest" if current_user.get("is_guest") else "user")
+            if current_role != expected_role:
+                return jsonify({"status": "fail", "message": "Forbidden."}), 403
+
+            return route_handler(*args, **kwargs)
+
+        return wrapper
+
+    return decorator

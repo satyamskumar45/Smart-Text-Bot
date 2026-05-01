@@ -1,95 +1,148 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import * as api from "../services/api";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const storedSession = api.getStoredSession();
-  const [user, setUser] = useState(storedSession?.user || null);
-  const [status, setStatus] = useState("ready");
-  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    let cancelled = false;
+    let ignore = false;
 
-    if (storedSession?.access_token) {
-      api.setAuthToken(storedSession.access_token);
-    }
+    async function restoreSession() {
+      const storedAuth = api.getStoredAuth();
 
-    if (!storedSession) {
-      setStatus("ready");
-      return undefined;
-    }
+      if (!storedAuth?.token) {
+        setStatus("ready");
+        return;
+      }
 
-    api.getSession()
-      .then((response) => {
-        if (cancelled) return;
-        api.setAuthToken(response.access_token);
-        api.persistSession({
-          access_token: response.access_token,
+      api.setAuthToken(storedAuth.token);
+      setToken(storedAuth.token);
+      setUser(storedAuth.user || null);
+
+      try {
+        const response = await api.getCurrentUser();
+        if (ignore) {
+          return;
+        }
+        const nextSession = {
+          ...storedAuth,
           user: response.user,
-          remember: storedSession.remember ?? response.user?.role !== "guest",
-        });
+        };
+        api.persistAuthSession(nextSession);
         setUser(response.user);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        api.clearStoredSession();
+      } catch (_error) {
+        if (ignore) {
+          return;
+        }
+        api.clearStoredAuth();
         api.setAuthToken(null);
+        setToken(null);
         setUser(null);
-      })
-      .finally(() => {
-        if (!cancelled) {
+      } finally {
+        if (!ignore) {
           setStatus("ready");
         }
-      });
+      }
+    }
+
+    restoreSession();
+
+    const unsubscribe = api.subscribeToAuthChanges((session) => {
+      if (ignore) {
+        return;
+      }
+
+      if (!session?.token) {
+        setToken(null);
+        setUser(null);
+        return;
+      }
+
+      setToken(session.token);
+      setUser(session.user || null);
+    });
 
     return () => {
-      cancelled = true;
+      ignore = true;
+      unsubscribe();
     };
   }, []);
 
-  const login = React.useCallback(async ({ email, password, remember }) => {
-    const result = await api.login(email, password, remember);
-    api.setAuthToken(result.access_token);
-    api.persistSession({ access_token: result.access_token, user: result.user, remember });
-    setUser(result.user);
-    return result.user;
-  }, []);
+  async function login(credentials) {
+    const response = await api.login(credentials);
+    const nextToken = response.access_token;
+    const session = {
+      token: nextToken,
+      refreshToken: response.refresh_token || null,
+      user: response.user,
+    };
 
-  const signup = React.useCallback(async ({ email, password, display_name, remember }) => {
-    const result = await api.signup(email, password, display_name, remember);
-    api.setAuthToken(result.access_token);
-    api.persistSession({ access_token: result.access_token, user: result.user, remember });
-    setUser(result.user);
-    return result.user;
-  }, []);
+    api.setAuthToken(nextToken);
+    api.persistAuthSession(session);
+    setToken(nextToken);
+    setUser(response.user);
 
-  const logout = React.useCallback(async () => {
-    await api.logout();
-    api.clearStoredSession();
-    api.setAuthToken(null);
-    setUser(null);
-    navigate("/auth/login", { replace: true });
-  }, [navigate]);
+    return response.user;
+  }
 
-  const startGuest = React.useCallback(async () => {
-    const result = await api.startGuest();
-    api.setAuthToken(result.access_token);
-    const guestUser = result.user || { role: "guest", display_name: "Guest Learner" };
-    api.persistSession({ access_token: result.access_token, user: guestUser, remember: true });
-    setUser(guestUser);
-    return result;
-  }, []);
+  async function signup(payload) {
+    const response = await api.signup(payload);
+    const nextToken = response.access_token;
+    const session = {
+      token: nextToken,
+      refreshToken: response.refresh_token || null,
+      user: response.user,
+    };
 
-  return (
-    <AuthContext.Provider value={{ user, status, login, signup, logout, startGuest }}>
-      {children}
-    </AuthContext.Provider>
+    api.setAuthToken(nextToken);
+    api.persistAuthSession(session);
+    setToken(nextToken);
+    setUser(response.user);
+
+    return response.user;
+  }
+
+  async function logout() {
+    const storedAuth = api.getStoredAuth();
+
+    try {
+      await api.logout(storedAuth?.refreshToken);
+    } catch (_error) {
+      // Clear local auth state even if backend logout fails.
+    } finally {
+      api.clearStoredAuth();
+      api.setAuthToken(null);
+      setToken(null);
+      setUser(null);
+    }
+  }
+
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      status,
+      isAuthenticated: Boolean(token && user),
+      login,
+      signup,
+      logout,
+    }),
+    [user, token, status]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider.");
+  }
+
+  return context;
 }

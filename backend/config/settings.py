@@ -26,6 +26,13 @@ def load_supported_languages():
 
 
 class Settings:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+    DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
+    MAX_TOKENS = int(os.getenv("MAX_TOKENS", "1024"))
+    MAX_RETRY_ATTEMPTS = int(os.getenv("MAX_RETRY_ATTEMPTS", "2"))
+    RETRY_DELAY = float(os.getenv("RETRY_DELAY", "0.5"))
+    RETRY_BACKOFF = float(os.getenv("RETRY_BACKOFF", "2.0"))
+
     TESSERACT_PATH = os.getenv("TESSERACT_PATH", "").strip()
     TESSERACT_WINDOWS_FALLBACK = os.getenv(
         "TESSERACT_WINDOWS_FALLBACK",

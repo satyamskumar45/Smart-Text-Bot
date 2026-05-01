@@ -37,12 +37,12 @@ def signup():
         return jsonify({"status": "fail", "message": "User already exists."}), 409
 
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    user = UserModel.create_user(email=email, password_hash=hashed, name=name)
+    user = UserModel.create_user(email=email, password_hash=hashed, name=name, role="user")
     if not user:
         return jsonify({"status": "fail", "message": "User already exists."}), 409
 
-    access_token, _ = create_access_token(user["id"])
-    refresh_token, refresh_expires_at = create_refresh_token(user["id"])
+    access_token, _ = create_access_token(user)
+    refresh_token, refresh_expires_at = create_refresh_token(user)
     RefreshTokenModel.create_token(user["id"], refresh_token, refresh_expires_at)
 
     return jsonify(
@@ -74,8 +74,8 @@ def login():
 
     UserModel.touch_login(str(user["_id"]))
     public_user = UserModel.update_streak(str(user["_id"]))
-    access_token, _ = create_access_token(str(user["_id"]))
-    refresh_token, refresh_expires_at = create_refresh_token(str(user["_id"]))
+    access_token, _ = create_access_token(public_user)
+    refresh_token, refresh_expires_at = create_refresh_token(public_user)
     RefreshTokenModel.create_token(str(user["_id"]), refresh_token, refresh_expires_at)
 
     return jsonify(
@@ -108,8 +108,12 @@ def refresh():
         return jsonify({"status": "fail", "message": "Refresh token expired or invalid."}), 401
 
     RefreshTokenModel.revoke_token(refresh_token)
-    access_token, _ = create_access_token(payload["sub"])
-    next_refresh_token, refresh_expires_at = create_refresh_token(payload["sub"])
+    user = UserModel.find_by_id(payload["sub"])
+    if not user:
+        return jsonify({"status": "fail", "message": "User not found."}), 401
+
+    access_token, _ = create_access_token(user)
+    next_refresh_token, refresh_expires_at = create_refresh_token(user)
     RefreshTokenModel.create_token(payload["sub"], next_refresh_token, refresh_expires_at)
 
     return jsonify(
@@ -135,12 +139,13 @@ def guest_login():
         name="Guest User",
         is_guest=True,
         guest_session_id=guest_session["session_id"],
+        role="guest",
     )
     if not user:
         return jsonify({"status": "fail", "message": "Unable to create guest user."}), 500
 
-    access_token, _ = create_access_token(user["id"])
-    refresh_token, refresh_expires_at = create_refresh_token(user["id"])
+    access_token, _ = create_access_token(user)
+    refresh_token, refresh_expires_at = create_refresh_token(user)
     RefreshTokenModel.create_token(user["id"], refresh_token, refresh_expires_at)
 
     return jsonify(

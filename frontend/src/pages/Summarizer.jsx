@@ -4,10 +4,22 @@ import { summarizeText } from "../services/api";
 export default function Summarizer() {
   const [text, setText] = useState("");
   const [summary, setSummary] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSummarize = async () => {
-    const data = await summarizeText(text);
-    setSummary(data.summary);
+    if (!text.trim() || loading) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await summarizeText(text);
+      setSummary(data.summary || "No summary returned.");
+    } catch {
+      setSummary("Unable to summarize this text right now.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,8 +45,8 @@ export default function Summarizer() {
           </div>
         </div>
 
-        <button onClick={handleSummarize} className="primary-btn">
-          Summarize
+        <button onClick={handleSummarize} className="primary-btn" disabled={loading || !text.trim()}>
+          {loading ? "Summarizing..." : "Summarize"}
         </button>
       </div>
     </div>

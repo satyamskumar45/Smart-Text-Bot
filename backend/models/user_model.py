@@ -12,16 +12,25 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
+def _normalize_user_role(user):
+    if not user:
+        return None
+    user["role"] = user.get("role") or ("guest" if user.get("is_guest") else "user")
+    return user
+
+
 class UserModel:
     @classmethod
-    def create_user(cls, email, password_hash, name=None, is_guest=False, guest_session_id=None):
+    def create_user(cls, email, password_hash, name=None, is_guest=False, guest_session_id=None, role=None):
         db = get_db()
         collection = db["users"]
         now = _utcnow()
+        normalized_role = "guest" if is_guest else (role or "user")
         document = {
             "email": email.lower() if email else None,
             "password": password_hash,
             "name": name,
+            "role": normalized_role,
             "is_guest": is_guest,
             "guest_session_id": guest_session_id,
             "created_at": now,
@@ -37,7 +46,7 @@ class UserModel:
 
         created = collection.find_one({"_id": result.inserted_id})
         created.pop("password", None)
-        return serialize(created)
+        return _normalize_user_role(serialize(created))
 
     @classmethod
     def find_by_email(cls, email, include_password=False):
@@ -49,9 +58,9 @@ class UserModel:
         if not user:
             return None
         if include_password:
-            return user
+            return _normalize_user_role(user)
         user.pop("password", None)
-        return serialize(user)
+        return _normalize_user_role(serialize(user))
 
     @classmethod
     def find_by_id(cls, user_id, include_password=False):
@@ -63,9 +72,9 @@ class UserModel:
         if not user:
             return None
         if include_password:
-            return user
+            return _normalize_user_role(user)
         user.pop("password", None)
-        return serialize(user)
+        return _normalize_user_role(serialize(user))
 
     @classmethod
     def touch_login(cls, user_id):
@@ -118,7 +127,7 @@ class UserModel:
 
         updated = collection.find_one({"_id": user["_id"]})
         updated.pop("password", None)
-        return serialize(updated)
+        return _normalize_user_role(serialize(updated))
 
 
 def _looks_like_object_id(value):
@@ -135,12 +144,13 @@ def _safe_object_id(value):
 def _legacy_user_payload(user):
     if not user:
         return None
+    role = user.get("role") or ("guest" if user.get("is_guest") else "user")
     return {
         "id": user["id"],
         "email": user.get("email"),
         "password_hash": user.get("password"),
         "display_name": user.get("name") or "",
-        "role": "guest" if user.get("is_guest") else "user",
+        "role": role,
         "is_active": True,
         "created_at": user.get("created_at"),
         "updated_at": user.get("updated_at"),
@@ -156,7 +166,7 @@ def get_user_by_id(user_id):
 
 
 def create_user(email, password_hash, display_name=None):
-    user = UserModel.create_user(email=email, password_hash=password_hash, name=display_name)
+    user = UserModel.create_user(email=email, password_hash=password_hash, name=display_name, role="user")
     return user["id"] if user else None
 
 

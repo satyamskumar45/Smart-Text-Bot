@@ -1,108 +1,116 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, startGuest } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const { login, isAuthenticated, status } = useAuth();
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = async (event) => {
+  const redirectTo = location.state?.from?.pathname || "/dashboard";
+
+  if (status !== "loading" && isAuthenticated) {
+    return <Navigate to={redirectTo} replace />;
+  }
+
+  function updateField(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  async function handleSubmit(event) {
     event.preventDefault();
-    if (loading) return;
+    if (submitting) {
+      return;
+    }
 
-    setLoading(true);
-    setError(null);
+    setSubmitting(true);
+    setError("");
 
     try {
-      await login({ email, password, remember });
-      navigate("/", { replace: true });
-    } catch (err) {
-      setError(err.message || "Unable to log in. Please try again.");
+      await login(form);
+      navigate(redirectTo, { replace: true });
+    } catch (submitError) {
+      setError(submitError.message || "Unable to log in.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
-  };
-
-  const handleGuest = async () => {
-    if (loading) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      await startGuest();
-      navigate("/", { replace: true });
-    } catch (err) {
-      setError(err.message || "Unable to start guest mode.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-brand">
-          <span>SmartTextBot</span>
-          <p>Secure startup-grade access for your language intelligence workspace.</p>
+      <div className="auth-hero">
+        <div className="auth-panel auth-panel-brand">
+          <div className="hero-eyebrow">
+            <span className="hero-eyebrow-dot" />
+            Secure workspace access
+          </div>
+          <h1 className="auth-title">Welcome back to SmartTextBot</h1>
+          <p className="auth-copy">
+            Sign in to unlock your dashboard, saved activity, and the full language
+            intelligence workspace.
+          </p>
+          <div className="auth-feature-list">
+            <div className="auth-feature-item">JWT-backed session with `/auth/me` restore</div>
+            <div className="auth-feature-item">Protected dashboard and tool routes</div>
+            <div className="auth-feature-item">Persistent local session in this browser</div>
+          </div>
         </div>
 
-        <form onSubmit={handleLogin} className="auth-form">
-          <label>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            required
-          />
-
-          <label>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Enter your secure password"
-            required
-          />
-
-          <div className="auth-row">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={() => setRemember((prev) => !prev)}
-              />
-              Remember me
-            </label>
-            <Link className="secondary-link" to="/auth/signup">
-              Create account
-            </Link>
+        <div className="auth-panel auth-panel-form">
+          <div className="auth-form-header">
+            <span className="auth-kicker">Login</span>
+            <h2>Sign in</h2>
+            <p>Use the same backend credentials served by your Flask auth routes.</p>
           </div>
 
-          {error && <div className="auth-error">{error}</div>}
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="input-group">
+              <label className="input-label" htmlFor="login-email">
+                Email
+              </label>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={updateField}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+            </div>
 
-          <button type="submit" className="primary-button" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
+            <div className="input-group">
+              <label className="input-label" htmlFor="login-password">
+                Password
+              </label>
+              <input
+                id="login-password"
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={updateField}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+              />
+            </div>
 
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleGuest}
-            disabled={loading}
-          >
-            Continue as guest
-          </button>
-        </form>
+            {error ? <div className="auth-error">{error}</div> : null}
 
-        <p className="auth-note">
-          Guest mode includes limited daily credits; upgrade any time for unlimited access.
-        </p>
+            <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
+              {submitting ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+
+          <p className="auth-switch">
+            New here? <Link to="/signup">Create an account</Link>
+          </p>
+        </div>
       </div>
     </div>
   );

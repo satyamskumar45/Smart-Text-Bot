@@ -14,7 +14,7 @@ def sentiment():
     Request: { "text": "..." }
     Response: { "success": true, "data": { "sentiment": "positive|negative|neutral", "positive": 0-1, "negative": 0-1, "neutral": 0-1, "explanation": "..." }, "error": null }
     """
-    data = request.json
+    data = request.get_json(silent=True) or {}
     text = data.get('text', '').strip()
 
     if not text:
@@ -42,8 +42,6 @@ def sentiment():
             'explanation': result.get('explanation', ''),
         }
         
-        print(f"[SENTIMENT] Analyzed text, result: {sentiment_data['sentiment']}")
         return success(sentiment_data)
-    except Exception as e:
-        print(f"[ERROR] Sentiment analysis failed: {str(e)}")
-        return error(f"Sentiment analysis failed: {str(e)}", 500)
+    except Exception as exc:
+        return error(f"Sentiment analysis failed: {exc}", 500)

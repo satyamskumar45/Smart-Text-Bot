@@ -56,18 +56,16 @@ def transform():
         current = getattr(g, 'current_user', None)
         if current:
             save_history_entry(
-                user_id=current.get('id') if current.get('role') == 'user' else None,
-                guest_session_id=current.get('guest_session_id') if current.get('role') == 'guest' else None,
+                user_id=current.get('id'),
+                guest_session_id=current.get('guest_session_id'),
                 module_type='context_engine',
                 input_text=text,
                 output_text=result,
                 metadata=json.dumps({'tone': tone}),
             )
-            if current.get('role') == 'guest':
+            if current.get('guest_session_id'):
                 track_guest_usage(current.get('guest_session_id'), 'writing')
-        
-        print(f"[CONTEXT] Transformed text to '{tone}' tone")
+
         return success(context_data)
-    except Exception as e:
-        print(f"[ERROR] Context transformation failed: {str(e)}")
-        return error(f"Context transformation failed: {str(e)}", 500)
+    except Exception as exc:
+        return error(f"Context transformation failed: {exc}", 500)

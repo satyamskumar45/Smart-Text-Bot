@@ -4,10 +4,22 @@ import { scanImage } from "../services/api";
 export default function ImageScanner() {
   const [image, setImage] = useState(null);
   const [result, setResult] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleUpload = async () => {
-    const data = await scanImage(image);
-    setResult(data.text);
+    if (!image || loading) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await scanImage(image);
+      setResult(data.text || "No text returned.");
+    } catch {
+      setResult("Unable to scan this image right now.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,8 +45,8 @@ export default function ImageScanner() {
           </div>
         </div>
 
-        <button onClick={handleUpload} className="primary-btn">
-          Scan Image
+        <button onClick={handleUpload} className="primary-btn" disabled={loading || !image}>
+          {loading ? "Scanning..." : "Scan Image"}
         </button>
       </div>
     </div>

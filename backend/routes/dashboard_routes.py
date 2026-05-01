@@ -1,13 +1,31 @@
+from datetime import datetime, timezone
 
 from flask import Blueprint, g, jsonify, request
+from bson import ObjectId
+from bson.errors import InvalidId
 
+from database.db import get_db
+from models.guest_session_model import delete_guest_sessions_for_user
 from models.history_model import HistoryModel
+from models.history_model import delete_history_for_user
 from models.progress_model import ProgressModel
+from models.refresh_token_model import delete_refresh_tokens_for_user
 from models.user_model import UserModel
-from utils.auth import auth_required
+from utils.auth import auth_required, require_role
 
 
 dashboard_bp = Blueprint("dashboard", __name__)
+
+
+def _user_object_id(user_id):
+    try:
+        return ObjectId(user_id)
+    except (InvalidId, TypeError):
+        return None
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 @dashboard_bp.route("/history", methods=["GET"])
@@ -106,3 +124,120 @@ def upsert_progress():
     )
     UserModel.update_streak(g.current_user_id)
     return jsonify({"status": "success", "item": item})
+
+
+@dashboard_bp.route("/admin/stats", methods=["GET"])
+@auth_required
+@require_role("admin")
+def admin_stats():
+    mongo = get_db()
+    total_users = mongo["users"].count_documents({"is_guest": {"$ne": True}})
+    total_history = mongo["history"].count_documents({})
+    total_active_sessions = mongo["refresh_tokens"].count_documents(
+        {
+            "is_revoked": False,
+            "expires_at": {"$gt": _utcnow()},
+        }
+    )
+    total_guest_sessions = mongo["guest_sessions"].count_documents({})
+
+    return jsonify(
+        {
+            "status": "success",
+            "stats": {
+                "total_users": total_users,
+                "total_history_entries": total_history,
+                "total_active_sessions": total_active_sessions,
+                "total_guest_sessions": total_guest_sessions,
+            },
+        }
+    )
+
+
+@dashboard_bp.route("/admin/users", methods=["GET"])
+@auth_required
+@require_role("admin")
+def admin_list_users():
+    mongo = get_db()
+    users = list(
+        mongo["users"]
+        .find({"is_guest": {"$ne": True}}, {"email": 1, "role": 1, "created_at": 1, "is_guest": 1})
+        .sort("created_at", -1)
+    )
+
+    items = []
+    for user in users:
+        items.append(
+            {
+                "id": str(user["_id"]),
+                "email": user.get("email"),
+                "role": user.get("role") or ("guest" if user.get("is_guest") else "user"),
+                "created_at": user.get("created_at").isoformat() if user.get("created_at") else None,
+            }
+        )
+
+    return jsonify({"status": "success", "users": items})
+
+
+@dashboard_bp.route("/admin/users/<user_id>/role", methods=["PATCH"])
+@auth_required
+@require_role("admin")
+def admin_update_user_role(user_id):
+    data = request.get_json(silent=True) or {}
+    next_role = (data.get("role") or "").strip().lower()
+
+    if next_role not in {"user", "admin"}:
+        return jsonify({"status": "fail", "message": "Role must be 'user' or 'admin'."}), 400
+
+    mongo = get_db()
+    target_user = UserModel.find_by_id(user_id)
+    object_id = _user_object_id(user_id)
+    if not target_user:
+        return jsonify({"status": "fail", "message": "User not found."}), 404
+    if not object_id:
+        return jsonify({"status": "fail", "message": "Invalid user id."}), 400
+    if target_user.get("is_guest"):
+        return jsonify({"status": "fail", "message": "Guest users cannot be assigned admin roles."}), 400
+
+    mongo["users"].update_one({"_id": object_id}, {"$set": {"role": next_role}})
+    updated_user = UserModel.find_by_id(user_id)
+
+    return jsonify(
+        {
+            "status": "success",
+            "user": {
+                "id": updated_user["id"],
+                "email": updated_user.get("email"),
+                "role": updated_user.get("role"),
+                "created_at": updated_user.get("created_at"),
+            },
+        }
+    )
+
+
+@dashboard_bp.route("/admin/users/<user_id>", methods=["DELETE"])
+@auth_required
+@require_role("admin")
+def admin_delete_user(user_id):
+    if user_id == g.current_user_id:
+        return jsonify({"status": "fail", "message": "You cannot delete your own admin account."}), 400
+
+    mongo = get_db()
+    target_user = UserModel.find_by_id(user_id)
+    object_id = _user_object_id(user_id)
+    if not target_user:
+        return jsonify({"status": "fail", "message": "User not found."}), 404
+    if not object_id:
+        return jsonify({"status": "fail", "message": "Invalid user id."}), 400
+    if target_user.get("is_guest"):
+        return jsonify({"status": "fail", "message": "Guest users cannot be deleted from this view."}), 400
+
+    delete_refresh_tokens_for_user(user_id)
+    delete_history_for_user(user_id)
+    delete_guest_sessions_for_user(user_id)
+    mongo["progress"].delete_many({"user_id": user_id})
+    mongo["learning_progress"].delete_many({"user_id": user_id})
+    mongo["streak_tracking"].delete_many({"user_id": user_id})
+    mongo["users"].delete_one({"_id": object_id})
+
+    return jsonify({"status": "success"})

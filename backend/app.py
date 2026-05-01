@@ -1,74 +1,87 @@
 import os
+
 from flask import Flask, jsonify
 from flask_cors import CORS
 from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
 
+from config.settings import Settings
 from database.db import init_db
 from routes.auth_routes import auth_bp
 from routes.chatbot_routes import chatbot_bp
 from routes.dashboard_routes import dashboard_bp
 from routes.grammar_routes import grammar_bp
+from routes.image_routes import image_bp
+from routes.sentiment_routes import sentiment_bp
+from routes.summarize_routes import summarize_bp
 from routes.translate_routes import translate_bp
 from routes.voice_routes import voice_bp
 
 
-def create_app():
-    app = Flask(__name__)
-
-    frontend_origins = [
+def _cors_origins():
+    configured = [
         origin.strip()
         for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
         if origin.strip()
     ]
+    if configured:
+        return configured
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
-    cors_origins = frontend_origins if frontend_origins else "*"
+
+def _validate_required_settings():
+    if not Settings.JWT_SECRET_KEY:
+        raise RuntimeError("JWT_SECRET_KEY environment variable is required.")
+    if not os.getenv("MONGO_URI"):
+        raise RuntimeError("MONGO_URI environment variable is required.")
+
+
+def create_app():
+    _validate_required_settings()
+    init_db()
+
+    app = Flask(__name__)
+    app.config["JSON_SORT_KEYS"] = False
+
     CORS(
         app,
-        resources={r"/*": {"origins": cors_origins}},
-        supports_credentials=bool(frontend_origins),
+        resources={r"/*": {"origins": _cors_origins()}},
+        supports_credentials=True,
     )
-
-    try:
-        init_db()
-    except Exception:
-        app.logger.exception("MongoDB startup initialization failed.")
 
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
-    # Register routes
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(chatbot_bp)
     app.register_blueprint(translate_bp)
     app.register_blueprint(grammar_bp)
-    app.register_blueprint(chatbot_bp)
+    app.register_blueprint(sentiment_bp)
+    app.register_blueprint(summarize_bp)
+    app.register_blueprint(image_bp)
     app.register_blueprint(voice_bp)
 
-    # Error handlers
-    @app.errorhandler(404)
-    def not_found(_error):
-        return jsonify({"status": "fail", "message": "Route not found."}), 404
-
-    @app.errorhandler(500)
-    def server_error(_error):
-        return jsonify({"status": "fail", "message": "Internal server error."}), 500
-
     @app.errorhandler(RuntimeError)
-    def runtime_error(error):
+    def handle_runtime_error(error):
         return jsonify({"status": "fail", "message": str(error)}), 500
 
     @app.errorhandler(PyMongoError)
-    def pymongo_error(_error):
+    def handle_pymongo_error(_error):
         return jsonify({"status": "fail", "message": "Database error"}), 500
 
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(error):
+        return jsonify({"status": "fail", "message": error.description}), error.code
+
     @app.errorhandler(Exception)
-    def unhandled_exception(error):
-        if isinstance(error, HTTPException):
-            return jsonify({"status": "fail", "message": error.description}), error.code
+    def handle_unexpected_error(error):
         app.logger.exception("Unhandled server error")
-        return jsonify({"status": "fail", "message": "Internal server error."}), 500
+        return jsonify({"status": "fail", "message": str(error) if app.debug else "Internal server error."}), 500
 
     return app
 

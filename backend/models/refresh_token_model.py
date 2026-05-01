@@ -91,6 +91,12 @@ def revoke_refresh_tokens_for_user(user_id):
     return True
 
 
+def delete_refresh_tokens_for_user(user_id):
+    db = get_db()
+    result = db["refresh_tokens"].delete_many({"user_id": user_id})
+    return result.deleted_count
+
+
 def purge_expired_tokens():
     db = get_db()
     result = db["refresh_tokens"].delete_many({"expires_at": {"$lt": _utcnow()}})

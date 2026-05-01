@@ -226,3 +226,9 @@ def attach_guest_history_to_user(guest_session_id, user_id):
         },
     )
     return True
+
+
+def delete_history_for_user(user_id):
+    db = get_db()
+    result = db["history"].delete_many({"user_id": user_id})
+    return result.deleted_count
