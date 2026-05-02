@@ -32,52 +32,53 @@ def signup():
 
         data = request.get_json(silent=True) or {}
         print("REQUEST DATA:", data)
-    email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
-    name = data.get("name")
 
-    if not email or not password:
-        return jsonify({"status": "fail", "message": "Email and password are required."}), 400
-    if not isinstance(password, str):
-        return jsonify({"status": "fail", "message": "Password must be a string."}), 400
-    if not _validate_email(email):
-        return jsonify({"status": "fail", "message": "Invalid email format."}), 400
+        email = (data.get("email") or "").strip().lower()
+        password = data.get("password") or ""
+        name = data.get("name")
+
+        if not email or not password:
+            return jsonify({"status": "fail", "message": "Email and password are required."}), 400
+        if not isinstance(password, str):
+            return jsonify({"status": "fail", "message": "Password must be a string."}), 400
+        if not _validate_email(email):
+            return jsonify({"status": "fail", "message": "Invalid email format."}), 400
 
         if UserModel.find_by_email(email):
             return jsonify({"status": "fail", "message": "User already exists."}), 409
 
-    try:
-        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    except Exception:
-        logger.exception("Error hashing password for email=%s", email)
-        return jsonify({"status": "error", "message": "Internal server error."}), 500
+        try:
+            hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        except Exception:
+            logger.exception("Error hashing password for email=%s", email)
+            return jsonify({"status": "error", "message": "Internal server error."}), 500
 
-    try:
-        user = UserModel.create_user(email=email, password_hash=hashed, name=name, role="user")
-    except Exception:
-        logger.exception("Unexpected error creating user for email=%s", email)
-        return jsonify({"status": "error", "message": "Internal server error."}), 500
+        try:
+            user = UserModel.create_user(email=email, password_hash=hashed, name=name, role="user")
+        except Exception:
+            logger.exception("Unexpected error creating user for email=%s", email)
+            return jsonify({"status": "error", "message": "Internal server error."}), 500
 
         if not user:
             return jsonify({"status": "fail", "message": "User already exists."}), 409
 
-    # Generate tokens and persist refresh token. Catch any JWT/env/db issues explicitly
-    try:
-        access_token, _ = create_access_token(user)
-        refresh_token, refresh_expires_at = create_refresh_token(user)
-        # PyJWT older versions may return bytes
-        if isinstance(access_token, bytes):
-            access_token = access_token.decode("utf-8")
-        if isinstance(refresh_token, bytes):
-            refresh_token = refresh_token.decode("utf-8")
-        RefreshTokenModel.create_token(user["id"], refresh_token, refresh_expires_at)
-    except RuntimeError as rexc:
-        # likely missing JWT_SECRET_KEY
-        logger.exception("JWT configuration error while creating tokens for user=%s: %s", user.get("id"), rexc)
-        return jsonify({"status": "error", "message": "Authentication configuration error."}), 500
-    except jwt.PyJWTError as jexc:
-        logger.exception("JWT error while creating tokens for user=%s: %s", user.get("id"), jexc)
-        return jsonify({"status": "error", "message": "Token generation failed."}), 500
+        # Generate tokens and persist refresh token. Catch any JWT/env/db issues explicitly
+        try:
+            access_token, _ = create_access_token(user)
+            refresh_token, refresh_expires_at = create_refresh_token(user)
+            # PyJWT older versions may return bytes
+            if isinstance(access_token, bytes):
+                access_token = access_token.decode("utf-8")
+            if isinstance(refresh_token, bytes):
+                refresh_token = refresh_token.decode("utf-8")
+            RefreshTokenModel.create_token(user["id"], refresh_token, refresh_expires_at)
+        except RuntimeError as rexc:
+            # likely missing JWT_SECRET_KEY
+            logger.exception("JWT configuration error while creating tokens for user=%s: %s", user.get("id"), rexc)
+            return jsonify({"status": "error", "message": "Authentication configuration error."}), 500
+        except jwt.PyJWTError as jexc:
+            logger.exception("JWT error while creating tokens for user=%s: %s", user.get("id"), jexc)
+            return jsonify({"status": "error", "message": "Token generation failed."}), 500
         except Exception:
             logger.exception("Error storing refresh token for user=%s", user.get("id"))
             return jsonify({"status": "error", "message": "Internal server error."}), 500
