@@ -1,10 +1,13 @@
 import axios from "axios";
 
-const API_BASE_URL = "https://smart-text-bot-backend-docker.onrender.com";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://smart-text-bot-backend.onrender.com";
+const USE_COOKIES = (import.meta.env.VITE_USE_COOKIES || "false") === "true";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
+  // If you use cookie-based (httpOnly) sessions, set VITE_USE_COOKIES=true.
+  // Otherwise, keep cookies off and use `Authorization: Bearer <token>`.
+  withCredentials: USE_COOKIES,
   headers: {
     "Content-Type": "application/json",
   },

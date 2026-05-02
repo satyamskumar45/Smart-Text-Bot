@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
@@ -21,23 +21,20 @@ from routes.voice_routes import voice_bp
 def _cors_origins():
     """
     Returns allowed CORS origins.
-    - Uses FRONTEND_ORIGINS env if provided
-    - Falls back to safe defaults for local + production
+    Supports:
+    - Production domain
+    - All preview subdomains (smart-text-bot.pages.dev)
+    - Local development
     """
 
     env_origins = os.getenv("FRONTEND_ORIGINS", "")
 
     if env_origins:
-        return [
-            origin.strip()
-            for origin in env_origins.split(",")
-            if origin.strip()
-        ]
+        return [origin.strip() for origin in env_origins.split(",") if origin.strip()]
 
-    # Default fallback (VERY IMPORTANT for your case)
+    # ⚠️ IMPORTANT: No wildcard "*" with credentials
     return [
         "https://smart-text-bot.pages.dev",
-        "https://*.smart-text-bot.pages.dev",  # allow preview deployments
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
@@ -52,15 +49,18 @@ def _validate_required_settings():
 
 def create_app():
     _validate_required_settings()
-    # Configure logging early so errors surface in Render logs
-    import logging
 
+    # Logging setup
+    import logging
     level = getattr(Settings, "LOG_LEVEL", "INFO")
     numeric_level = getattr(logging, level.upper(), logging.INFO)
+
     handler = logging.StreamHandler()
     handler.setLevel(numeric_level)
+
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     handler.setFormatter(formatter)
+
     logging.root.setLevel(numeric_level)
     logging.root.addHandler(handler)
 
@@ -69,16 +69,31 @@ def create_app():
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
 
+    # 🔥 FIXED CORS CONFIG
     CORS(
         app,
         resources={r"/*": {"origins": _cors_origins()}},
         supports_credentials=True,
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
     )
+
+    # 🔥 HANDLE PREFLIGHT REQUESTS (CRITICAL FIX)
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = jsonify({"status": "ok"})
+            response.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin", "")
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response, 200
 
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
+    # Register blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(chatbot_bp)
@@ -89,6 +104,7 @@ def create_app():
     app.register_blueprint(image_bp)
     app.register_blueprint(voice_bp)
 
+    # Error handlers
     @app.errorhandler(RuntimeError)
     def handle_runtime_error(error):
         return jsonify({"status": "fail", "message": str(error)}), 500
@@ -104,12 +120,16 @@ def create_app():
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
         app.logger.exception("Unhandled server error")
-        return jsonify({"status": "fail", "message": str(error) if app.debug else "Internal server error."}), 500
+        return jsonify({
+            "status": "fail",
+            "message": str(error) if app.debug else "Internal server error."
+        }), 500
 
     return app
 
 
 app = create_app()
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
