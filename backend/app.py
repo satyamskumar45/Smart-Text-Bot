@@ -1,3 +1,4 @@
+print("🔥🔥🔥 NEW APP VERSION RUNNING 🔥🔥🔥")
 import logging
 import os
 import re
@@ -17,7 +18,6 @@ from routes.sentiment_routes import sentiment_bp
 from routes.summarize_routes import summarize_bp
 from routes.translate_routes import translate_bp
 from routes.voice_routes import voice_bp
-
 
 # ================= VALIDATION =================
 def _validate_required_settings():
