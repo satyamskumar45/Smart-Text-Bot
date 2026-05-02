@@ -1,6 +1,7 @@
 import os
+import re
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, current_app
 from flask_cors import CORS
 from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
@@ -29,15 +30,22 @@ def _cors_origins():
 
     env_origins = os.getenv("FRONTEND_ORIGINS", "")
 
-    if env_origins:
-        return [origin.strip() for origin in env_origins.split(",") if origin.strip()]
-
-    # ⚠️ IMPORTANT: No wildcard "*" with credentials
-    return [
+    # IMPORTANT: no "*" origin with supports_credentials=True.
+    # Use strings (regex patterns or literal origins). We'll match them later.
+    origins = [
+        r"^https://([a-z0-9-]+\.)?smart-text-bot\.pages\.dev$",
         "https://smart-text-bot.pages.dev",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+
+    origins.extend(
+        origin.strip()
+        for origin in env_origins.split(",")
+        if origin.strip() and origin.strip() != "*" and "*" not in origin
+    )
+
+    return origins
 
 
 def _validate_required_settings():
@@ -69,7 +77,8 @@ def create_app():
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
 
-    # 🔥 FIXED CORS CONFIG
+    # CORS config
+    # Apply Flask-CORS with permissive resource mapping but strict origin checking
     CORS(
         app,
         resources={r"/*": {"origins": _cors_origins()}},
@@ -78,16 +87,68 @@ def create_app():
         allow_headers=["Content-Type", "Authorization"],
     )
 
-    # 🔥 HANDLE PREFLIGHT REQUESTS (CRITICAL FIX)
+    # Helper: check whether an origin is allowed by configured patterns
+    allowed_origin_patterns = _cors_origins()
+
+    def _origin_allowed(origin: str) -> bool:
+        if not origin:
+            return False
+        for pattern in allowed_origin_patterns:
+            try:
+                # if pattern looks like a regex (starts with ^ or contains regex tokens)
+                if pattern.startswith("^") or any(ch in pattern for ch in "\\().[]?+|$"):
+                    if re.match(pattern, origin):
+                        return True
+                else:
+                    if origin == pattern:
+                        return True
+            except re.error:
+                # fallback to exact compare
+                if origin == pattern:
+                    return True
+        return False
+
+    # Log every request and its payload for debugging
     @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            response = jsonify({"status": "ok"})
-            response.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin", "")
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    def _log_request():
+        try:
+            current_app.logger.info("%s %s", request.method, request.path)
+            # only log small payloads
+            data = request.get_data(as_text=True)
+            if data:
+                current_app.logger.debug("Request data: %s", data)
+        except Exception:
+            current_app.logger.exception("Error logging request")
+
+    # Ensure CORS headers are set for all responses and handle OPTIONS preflight
+    @app.after_request
+    def _apply_cors_headers(response):
+        origin = request.headers.get("Origin")
+        if origin and _origin_allowed(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
             response.headers["Access-Control-Allow-Credentials"] = "true"
-            return response, 200
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization, X-Requested-With"
+            )
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+        return response
+
+    @app.route("/<path:_any>", methods=["OPTIONS"])
+    @app.route("/", methods=["OPTIONS"])
+    def _handle_options(_any=None):
+        # Return a short-circuit response for preflight requests
+        response = jsonify({"status": "ok"})
+        origin = request.headers.get("Origin")
+        if origin and _origin_allowed(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization, X-Requested-With"
+            )
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+        return response
 
     @app.get("/health")
     def health():

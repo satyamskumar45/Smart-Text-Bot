@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://smart-text-bot-backend.onrender.com";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const USE_COOKIES = (import.meta.env.VITE_USE_COOKIES || "false") === "true";
 
 const api = axios.create({
@@ -12,6 +12,46 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+// Request interceptor: log outgoing requests
+api.interceptors.request.use(
+  (cfg) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("API Request:", cfg.method, cfg.url, cfg.data || cfg.params);
+    } catch (e) {
+      // ignore
+    }
+    return cfg;
+  },
+  (err) => {
+    // eslint-disable-next-line no-console
+    console.error("API request error:", err);
+    return Promise.reject(err);
+  }
+);
+
+// Response interceptor: centralize error logging and normalize error shape
+api.interceptors.response.use(
+  (res) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("API Response:", res.status, res.config.url, res.data);
+    } catch (e) {}
+    return res;
+  },
+  (error) => {
+    // Normalize network / server errors to include response data when present
+    const normalized = {
+      message: error.message || "Network or server error",
+      status: error.response ? error.response.status : null,
+      data: error.response ? error.response.data : null,
+    };
+    // eslint-disable-next-line no-console
+    console.error("API Error:", normalized);
+    return Promise.reject(normalized);
+  }
+);
 
 // ================= AUTH APIs =================
 export const signup = (data) => api.post("/auth/signup", data);
@@ -29,7 +69,18 @@ export const setAuthToken = (token) => {
 };
 
 export const persistAuthSession = (data) => {
-  localStorage.setItem("auth", JSON.stringify(data));
+  try {
+    localStorage.setItem("auth", JSON.stringify(data));
+    // keep axios header in sync
+    if (data && data.access_token) {
+      setAuthToken(data.access_token);
+    } else if (data && data.token) {
+      setAuthToken(data.token);
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("persistAuthSession error", e);
+  }
 };
 
 export const getStoredAuth = () => {
@@ -43,7 +94,9 @@ export const clearStoredAuth = () => {
 };
 
 export const subscribeToAuthChanges = (callback) => {
-  window.addEventListener("storage", callback);
+  const wrapped = (evt) => callback(evt);
+  window.addEventListener("storage", wrapped);
+  return () => window.removeEventListener("storage", wrapped);
 };
 
 // ================= DASHBOARD =================

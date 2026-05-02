@@ -30,26 +30,43 @@ def _build_client():
 def _get_database_name():
     return os.getenv("MONGO_DB_NAME", DEFAULT_DB_NAME).strip() or DEFAULT_DB_NAME
 
-
 def init_db():
     global _client, _db, _indexes_ready
 
+    # If DB already initialized, return it
     if _db is not None:
         return _db
 
     with _lock:
+        # Double-check inside lock
         if _db is not None:
             return _db
 
         try:
             client = _build_client()
+
+            # Test connection
             client.admin.command("ping")
+
+            # Get database
             database = client[_get_database_name()]
+
+            # Ensure indexes
             _ensure_indexes(database)
+
+            # 🔥 CRITICAL FIX: assign globals
+            _client = client
+            _db = database
+            _indexes_ready = True
+
+            return _db
+
         except (PyMongoError, RuntimeError) as exc:
+            # Reset state on failure
             _client = None
             _db = None
             _indexes_ready = False
+
             raise RuntimeError(f"MongoDB connection failed: {exc}") from exc
 
         _client = client
@@ -59,10 +76,13 @@ def init_db():
 
 
 def get_db():
-    return _db or init_db()
+    global _db
+    if _db is None:
+        return init_db()
+    return _db
 
 
-def _ensure_indexes(db):
+def _ensure_indexes(db): 
     if _indexes_ready:
         return
 
