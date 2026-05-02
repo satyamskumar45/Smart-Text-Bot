@@ -1,5 +1,7 @@
 import re
 import logging
+import os
+import traceback
 
 import bcrypt
 import jwt
@@ -24,7 +26,12 @@ def _validate_email(email):
 
 @auth_bp.route("/signup", methods=["POST"])
 def signup():
-    data = request.get_json(silent=True) or {}
+    try:
+        print("=== SIGNUP HIT ===")
+        print("JWT ENV:", os.getenv("JWT_SECRET_KEY"))
+
+        data = request.get_json(silent=True) or {}
+        print("REQUEST DATA:", data)
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
     name = data.get("name")
@@ -36,8 +43,8 @@ def signup():
     if not _validate_email(email):
         return jsonify({"status": "fail", "message": "Invalid email format."}), 400
 
-    if UserModel.find_by_email(email):
-        return jsonify({"status": "fail", "message": "User already exists."}), 409
+        if UserModel.find_by_email(email):
+            return jsonify({"status": "fail", "message": "User already exists."}), 409
 
     try:
         hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -51,8 +58,8 @@ def signup():
         logger.exception("Unexpected error creating user for email=%s", email)
         return jsonify({"status": "error", "message": "Internal server error."}), 500
 
-    if not user:
-        return jsonify({"status": "fail", "message": "User already exists."}), 409
+        if not user:
+            return jsonify({"status": "fail", "message": "User already exists."}), 409
 
     # Generate tokens and persist refresh token. Catch any JWT/env/db issues explicitly
     try:
@@ -71,18 +78,23 @@ def signup():
     except jwt.PyJWTError as jexc:
         logger.exception("JWT error while creating tokens for user=%s: %s", user.get("id"), jexc)
         return jsonify({"status": "error", "message": "Token generation failed."}), 500
-    except Exception:
-        logger.exception("Error storing refresh token for user=%s", user.get("id"))
-        return jsonify({"status": "error", "message": "Internal server error."}), 500
+        except Exception:
+            logger.exception("Error storing refresh token for user=%s", user.get("id"))
+            return jsonify({"status": "error", "message": "Internal server error."}), 500
 
-    return jsonify(
-        {
-            "status": "created",
-            "user": serialize_user(user),
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-        }
-    )
+        return jsonify(
+            {
+                "status": "created",
+                "user": serialize_user(user),
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+            }
+        )
+    except Exception as e:
+        print("❌ SIGNUP ERROR:", str(e))
+        traceback.print_exc()
+        logger.exception("Unhandled signup error")
+        return jsonify({"error": str(e), "type": str(type(e))}), 500
 
 
 @auth_bp.route("/login", methods=["POST"])
