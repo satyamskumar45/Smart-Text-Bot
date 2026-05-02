@@ -3,7 +3,6 @@ import os
 import re
 
 from flask import Flask, jsonify, request, current_app
-from flask_cors import CORS
 from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
 
@@ -20,6 +19,7 @@ from routes.translate_routes import translate_bp
 from routes.voice_routes import voice_bp
 
 
+# ================= VALIDATION =================
 def _validate_required_settings():
     if not Settings.JWT_SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY environment variable is required.")
@@ -27,6 +27,25 @@ def _validate_required_settings():
         raise RuntimeError("MONGO_URI environment variable is required.")
 
 
+# ================= CORS CHECK =================
+def _is_allowed_origin(origin):
+    if not origin:
+        return False
+
+    allowed_exact = {
+        "https://smart-text-bot.pages.dev",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }
+
+    if origin in allowed_exact:
+        return True
+
+    # ✅ Allow Cloudflare preview URLs
+    return bool(re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin))
+
+
+# ================= APP FACTORY =================
 def create_app():
     _validate_required_settings()
 
@@ -36,9 +55,7 @@ def create_app():
 
     handler = logging.StreamHandler()
     handler.setLevel(numeric_level)
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
 
     logging.root.setLevel(numeric_level)
     logging.root.addHandler(handler)
@@ -49,38 +66,12 @@ def create_app():
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
 
-    # ✅ Allowed origins logic
-    def is_allowed_origin(origin: str | None):
-        if not origin:
-            return False
-
-        allowed_exact = {
-            "https://smart-text-bot.pages.dev",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        }
-
-        if origin in allowed_exact:
-            return True
-
-        # Allow Cloudflare preview deployments
-        return bool(re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin))
-
-    # ✅ Flask-CORS setup
-    CORS(
-        app,
-        supports_credentials=True,
-        origins=is_allowed_origin,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    )
-
-    # ✅ CRITICAL FIX: force headers on EVERY response
+    # ================= CORS (MANUAL FIX) =================
     @app.after_request
-    def apply_cors_headers(response):
+    def add_cors_headers(response):
         origin = request.headers.get("Origin")
 
-        if is_allowed_origin(origin):
+        if _is_allowed_origin(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -88,22 +79,31 @@ def create_app():
 
         return response
 
-    # ✅ Handle preflight explicitly
     @app.before_request
     def handle_preflight():
         if request.method == "OPTIONS":
-            return app.make_default_options_response()
+            response = app.make_response("")
+            origin = request.headers.get("Origin")
 
-    # Logging requests
+            if _is_allowed_origin(origin):
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+
+            return response
+
+    # ================= LOG REQUESTS =================
     @app.before_request
     def _log_request():
         current_app.logger.info("%s %s", request.method, request.path)
 
+    # ================= HEALTH =================
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
-    # Register blueprints
+    # ================= ROUTES =================
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(chatbot_bp)
@@ -114,7 +114,7 @@ def create_app():
     app.register_blueprint(image_bp)
     app.register_blueprint(voice_bp)
 
-    # Error handlers
+    # ================= ERROR HANDLERS =================
     @app.errorhandler(RuntimeError)
     def handle_runtime_error(error):
         return jsonify({"status": "fail", "message": str(error)}), 500
@@ -138,8 +138,8 @@ def create_app():
     return app
 
 
+# ================= ENTRY =================
 app = create_app()
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
