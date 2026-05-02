@@ -85,7 +85,35 @@ export const persistAuthSession = (data) => {
 
 export const getStoredAuth = () => {
   const data = localStorage.getItem("auth");
-  return data ? JSON.parse(data) : null;
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("getStoredAuth: failed to parse stored auth", e);
+    try {
+      localStorage.removeItem("auth");
+    } catch (remErr) {
+      // ignore
+    }
+    return null;
+  }
+};
+
+export const explainTranslation = (arg1, arg2, arg3, arg4) => {
+  let payload;
+  if (typeof arg1 === "object" && arg1 !== null) {
+    payload = arg1;
+  } else {
+    // support explainTranslation(text, translated_text, source_lang, target_lang)
+    payload = {
+      text: arg1,
+      translated_text: arg2,
+      source_lang: arg3,
+      target_lang: arg4,
+    };
+  }
+  return api.post("/translate", payload);
 };
 
 export const clearStoredAuth = () => {

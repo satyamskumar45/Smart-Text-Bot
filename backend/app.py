@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 
@@ -30,15 +31,12 @@ def create_app():
     _validate_required_settings()
 
     # Logging setup
-    import logging
     level = getattr(Settings, "LOG_LEVEL", "INFO")
     numeric_level = getattr(logging, level.upper(), logging.INFO)
 
     handler = logging.StreamHandler()
     handler.setLevel(numeric_level)
-
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    handler.setFormatter(formatter)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
 
     logging.root.setLevel(numeric_level)
     logging.root.addHandler(handler)
@@ -49,19 +47,36 @@ def create_app():
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
 
-    # ✅ CLEAN & CORRECT CORS (ONLY THIS — no manual logic)
+    # ✅ FIX 1: flask-cors does NOT support compiled regex in `origins`.
+    # Use a callable instead to match dynamic preview URLs.
+    def origin_check(origin):
+        if not origin:
+            return False
+        allowed_exact = {
+            "https://smart-text-bot.pages.dev",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        }
+        if origin in allowed_exact:
+            return True
+        # Match Cloudflare preview domains
+        return bool(re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin))
+
     CORS(
         app,
         supports_credentials=True,
-        origins=[
-            re.compile(r"https://.*\.smart-text-bot\.pages\.dev"),  # preview domains
-            "https://smart-text-bot.pages.dev",                     # production domain
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ],
+        origins=origin_check,            # ✅ callable, not a list with regex
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        expose_headers=["Content-Type", "Authorization"],  # ✅ FIX 2: expose headers to client
+        max_age=600,                     # ✅ FIX 3: cache preflight for 10 min
     )
+
+    # ✅ FIX 4: Explicitly handle OPTIONS preflight so it never hits auth middleware
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            return app.make_default_options_response()
 
     # Logging requests
     @app.before_request

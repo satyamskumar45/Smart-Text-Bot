@@ -121,10 +121,11 @@ export default function Chat() {
     setError("");
 
     try {
-      const result = await translate(practiceText, "en", language);
-      const translation = result.translated_text || result.translation || "";
+      const result = await translate({ text: practiceText, source: "en", target: language });
+      const translation = result?.data?.translated_text || result?.data?.translation || "";
       setPracticeOutput(translation);
-      const detail = await explainTranslation(practiceText, translation, "en", language);
+      const detailRes = await explainTranslation({ text: practiceText, translated_text: translation, source_lang: "en", target_lang: language });
+      const detail = detailRes?.data || null;
       setPracticeNotes(detail || null);
       rewardXp(15);
     } catch (err) {

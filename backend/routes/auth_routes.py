@@ -1,6 +1,6 @@
 import re
 import logging
-import traceback
+
 
 import bcrypt
 import jwt
@@ -10,6 +10,7 @@ from models.guest_session_model import GuestSessionModel
 from models.refresh_token_model import RefreshTokenModel
 from models.user_model import UserModel, serialize_user
 from utils.auth import auth_required, create_access_token, create_refresh_token, decode_token, get_bearer_token
+from services.auth_service import logout_user
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -54,7 +55,7 @@ def signup():
             hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         except Exception as e:
             current_app.logger.exception("Password hashing failed")
-            return jsonify({"status": "error", "message": str(e)}), 500
+            return jsonify({"status": "error", "message": "An unexpected error occurred"}), 500
 
         # ✅ Create user
         try:
@@ -66,7 +67,7 @@ def signup():
             )
         except Exception as e:
             current_app.logger.exception("User creation failed")
-            return jsonify({"status": "error", "message": str(e)}), 500
+            return jsonify({"status": "error", "message": "An unexpected error occurred"}), 500
 
         if not user:
             return jsonify({"status": "fail", "message": "User already exists."}), 409
@@ -90,7 +91,7 @@ def signup():
 
         except Exception as e:
             current_app.logger.exception("Token creation failed")
-            return jsonify({"status": "error", "message": str(e)}), 500
+            return jsonify({"status": "error", "message": "An unexpected error occurred"}), 500
 
         # ✅ Final response
         response = {
@@ -107,10 +108,9 @@ def signup():
 
     except Exception as e:
         current_app.logger.exception("Unhandled signup error")
-        traceback.print_exc()
         return jsonify({
             "status": "error",
-            "message": str(e)  # 🔥 now shows real error
+            "message": "An unexpected error occurred"
         }), 500
 
 
@@ -153,7 +153,7 @@ def login():
 
     except Exception as e:
         current_app.logger.exception("Login error")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An unexpected error occurred"}), 500
 
 
 # ================= ME =================
@@ -164,3 +164,23 @@ def me():
         "status": "success",
         "user": g.current_user
     })
+
+
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    try:
+        data = request.get_json(silent=True) or {}
+        refresh_token = data.get("refresh_token") or None
+        if not refresh_token:
+            try:
+                refresh_token = request.cookies.get("refresh_token")
+            except Exception:
+                refresh_token = None
+        if not refresh_token:
+            refresh_token = get_bearer_token()
+
+        logout_user(refresh_token)
+        return jsonify({"status": "success", "message": "Logged out"}), 200
+    except Exception as e:
+        current_app.logger.exception("Logout error")
+        return jsonify({"status": "error", "message": "An unexpected error occurred"}), 500
