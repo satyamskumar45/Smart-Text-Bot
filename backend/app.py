@@ -19,14 +19,25 @@ from routes.voice_routes import voice_bp
 
 
 def _cors_origins():
-    configured = [
-        origin.strip()
-        for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
-        if origin.strip()
-    ]
-    if configured:
-        return configured
+    """
+    Returns allowed CORS origins.
+    - Uses FRONTEND_ORIGINS env if provided
+    - Falls back to safe defaults for local + production
+    """
+
+    env_origins = os.getenv("FRONTEND_ORIGINS", "")
+
+    if env_origins:
+        return [
+            origin.strip()
+            for origin in env_origins.split(",")
+            if origin.strip()
+        ]
+
+    # Default fallback (VERY IMPORTANT for your case)
     return [
+        "https://smart-text-bot.pages.dev",
+        "https://*.smart-text-bot.pages.dev",  # allow preview deployments
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
