@@ -36,7 +36,9 @@ def create_app():
 
     handler = logging.StreamHandler()
     handler.setLevel(numeric_level)
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
 
     logging.root.setLevel(numeric_level)
     logging.root.addHandler(handler)
@@ -47,32 +49,46 @@ def create_app():
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
 
-    # ✅ FIX 1: flask-cors does NOT support compiled regex in `origins`.
-    # Use a callable instead to match dynamic preview URLs.
-    def origin_check(origin):
+    # ✅ Allowed origins logic
+    def is_allowed_origin(origin: str | None):
         if not origin:
             return False
+
         allowed_exact = {
             "https://smart-text-bot.pages.dev",
             "http://localhost:5173",
             "http://127.0.0.1:5173",
         }
+
         if origin in allowed_exact:
             return True
-        # Match Cloudflare preview domains
+
+        # Allow Cloudflare preview deployments
         return bool(re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin))
 
+    # ✅ Flask-CORS setup
     CORS(
         app,
         supports_credentials=True,
-        origins=origin_check,            # ✅ callable, not a list with regex
+        origins=is_allowed_origin,
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        expose_headers=["Content-Type", "Authorization"],  # ✅ FIX 2: expose headers to client
-        max_age=600,                     # ✅ FIX 3: cache preflight for 10 min
     )
 
-    # ✅ FIX 4: Explicitly handle OPTIONS preflight so it never hits auth middleware
+    # ✅ CRITICAL FIX: force headers on EVERY response
+    @app.after_request
+    def apply_cors_headers(response):
+        origin = request.headers.get("Origin")
+
+        if is_allowed_origin(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+
+        return response
+
+    # ✅ Handle preflight explicitly
     @app.before_request
     def handle_preflight():
         if request.method == "OPTIONS":
