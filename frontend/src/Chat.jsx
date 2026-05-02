@@ -122,10 +122,10 @@ export default function Chat() {
 
     try {
       const result = await translate(practiceText, "en", language);
-      const translation = result.data.translated_text || "";
+      const translation = result.translated_text || result.translation || "";
       setPracticeOutput(translation);
       const detail = await explainTranslation(practiceText, translation, "en", language);
-      setPracticeNotes(detail.data || null);
+      setPracticeNotes(detail || null);
       rewardXp(15);
     } catch (err) {
       console.error("[LANGUAGE QUEST ERROR]", err);
