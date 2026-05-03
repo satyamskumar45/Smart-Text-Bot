@@ -5,10 +5,10 @@ from services.groq_service import translate_text, complete_json
 from services.history_service import save_history_entry
 
 
-def translate(text: str, target: str) -> str:
+def translate(text: str, target: str, source: str = "auto", tone: str = "") -> str:
     if not text or not target:
         raise ValueError("text and target are required")
-    return translate_text(text, target)
+    return translate_text(text, target, source_lang=source, tone=tone)
 
 
 def summarize(text: str, mode: str = "short", filename: Optional[str] = None) -> dict:

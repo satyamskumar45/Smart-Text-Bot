@@ -11,7 +11,10 @@ def translate():
     try:
         data = request.get_json(silent=True) or {}
         text = (data.get("text") or "").strip()
+        source = (data.get("source") or data.get("source_lang") or "auto").strip()
         target = (data.get("target") or data.get("target_lang") or "").strip()
+        tone = (data.get("tone") or "").strip().lower()
+        include_variants = bool(data.get("include_variants"))
 
         if not text:
             current_app.logger.info("Translate called without text")
@@ -21,8 +24,17 @@ def translate():
             current_app.logger.info("Translate called without target language")
             return error_response(message="'target' language is required", status_code=400)
 
-        translated = translate_service(text, target)
-        return success_response(data={"translation": translated}, message="Translation successful", status_code=200)
+        translated = translate_service(text, target, source=source, tone=tone)
+        response_data = {"translation": translated}
+
+        if include_variants:
+            response_data["variants"] = {
+                "formal": translate_service(text, target, source=source, tone="formal"),
+                "informal": translate_service(text, target, source=source, tone="informal conversational"),
+                "simple": translate_service(text, target, source=source, tone="simple beginner-friendly"),
+            }
+
+        return success_response(data=response_data, message="Translation successful", status_code=200)
 
     except ValueError as ve:
         current_app.logger.info("Translate validation error: %s", ve)

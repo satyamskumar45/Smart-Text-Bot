@@ -18,7 +18,7 @@ import "./style.css";
 const navItems = [
   { to: "/dashboard", icon: "D", label: "Dashboard" },
   { to: "/", icon: "O", label: "Overview", exact: true },
-  { to: "/chat", icon: "C", label: "AI Chat" },
+  { to: "/chat", icon: "Q", label: "Language Quest" },
   { to: "/translate", icon: "T", label: "Translate" },
   { to: "/sentiment", icon: "S", label: "Sentiment" },
   { to: "/summarize", icon: "M", label: "Summarizer" },
@@ -30,7 +30,7 @@ const navItems = [
 const pageTitles = {
   "/": "Overview",
   "/dashboard": "Dashboard",
-  "/chat": "AI Chat",
+  "/chat": "Language Quest",
   "/translate": "Translation",
   "/sentiment": "Sentiment Analysis",
   "/summarize": "Text Summarizer",

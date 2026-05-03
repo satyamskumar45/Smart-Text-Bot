@@ -176,6 +176,10 @@ export const subscribeToAuthChanges = (callback) => {
 
 // ================= DASHBOARD =================
 export const fetchDashboard = () => api.get("/dashboard");
+export const fetchHistory = () => api.get("/history");
+export const fetchFavorites = () => api.get("/history", { params: { favorites: "true" } });
+export const toggleFavorite = (historyId, isFavorite) =>
+  api.patch(`/history/${historyId}/favorite`, { is_favorite: isFavorite });
 
 // ================= CHAT =================
 export const chat = (data) => api.post("/chat", typeof data === "string" ? { message: data } : data);
@@ -220,7 +224,7 @@ export const fetchAdminStats = () => api.get("/admin/stats");
 export const fetchAdminUsers = () => api.get("/admin/users");
 
 export const updateAdminUserRole = (userId, role) =>
-  api.put(`/admin/users/${userId}/role`, { role });
+  api.patch(`/admin/users/${userId}/role`, { role });
 
 export const deleteAdminUser = (userId) =>
   api.delete(`/admin/users/${userId}`);

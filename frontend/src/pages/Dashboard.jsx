@@ -1,28 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as api from "../services/api";
 
 const statCards = [
-  { key: "history_count", label: "History Items" },
-  { key: "favorites_count", label: "Favorites" },
-  { key: "translations_count", label: "Translations" },
-  { key: "summaries_count", label: "Summaries" },
-  { key: "chat_count", label: "Chats" },
-  { key: "streak_count", label: "Current Streak" },
-  { key: "modules_started", label: "Modules Started" },
-  { key: "modules_completed", label: "Modules Completed" },
+  { key: "history_count", label: "Saved Work", accent: "teal" },
+  { key: "translations_count", label: "Translations", accent: "blue" },
+  { key: "summaries_count", label: "Summaries", accent: "amber" },
+  { key: "chat_count", label: "Practice Sessions", accent: "teal" },
+  { key: "streak_count", label: "Learning Streak", accent: "blue" },
+  { key: "favorites_count", label: "Favorites", accent: "amber" },
 ];
 
-function StatCard({ label, value }) {
+const missions = [
+  { title: "Translate one useful sentence", reward: "15 XP", path: "/translate" },
+  { title: "Finish one Language Quest quiz", reward: "20 XP", path: "/chat" },
+  { title: "Summarize a paragraph", reward: "10 XP", path: "/summarize" },
+];
+
+function StatCard({ item, value }) {
   return (
-    <article className="dashboard-stat-card">
-      <span>{label}</span>
+    <article className={`dashboard-stat-card stat-${item.accent}`}>
+      <span>{item.label}</span>
       <strong>{value ?? 0}</strong>
     </article>
   );
 }
 
 export default function Dashboard() {
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -56,26 +60,70 @@ export default function Dashboard() {
     };
   }, []);
 
+  const totalActivity = useMemo(
+    () => statCards.reduce((sum, item) => sum + Number(stats[item.key] || 0), 0),
+    [stats]
+  );
+
+  const completion = Math.min(100, Math.max(12, totalActivity * 8));
+
   return (
-    <div className="dashboard-page">
-      <div className="page-header">
-        <h1>Dashboard</h1>
-        <p>
-          Your authenticated workspace overview, powered by the existing backend
-          dashboard endpoint.
-        </p>
-      </div>
+    <div className="dashboard-page dashboard-v2">
+      <section className="dashboard-hero">
+        <div>
+          <div className="hero-eyebrow">
+            <span className="hero-eyebrow-dot" />
+            Today in SmartTextBot
+          </div>
+          <h1>Your AI language cockpit is ready.</h1>
+          <p>Track practice, launch tools, and keep your learning streak moving with small daily wins.</p>
+        </div>
+        <div className="dashboard-level-card">
+          <span>Daily momentum</span>
+          <strong>{completion}%</strong>
+          <div className="quest-progress">
+            <div style={{ width: `${completion}%` }} />
+          </div>
+        </div>
+      </section>
 
       {loading ? <div className="loading-card">Loading dashboard metrics...</div> : null}
       {error ? <div className="auth-error">{error}</div> : null}
 
-      {stats && !loading ? (
-        <div className="dashboard-grid">
-          {statCards.map((card) => (
-            <StatCard key={card.key} label={card.label} value={stats[card.key]} />
-          ))}
-        </div>
-      ) : null}
+      <div className="dashboard-grid">
+        {statCards.map((item) => (
+          <StatCard key={item.key} item={item} value={stats[item.key]} />
+        ))}
+      </div>
+
+      <div className="dashboard-panels">
+        <section className="card">
+          <div className="card-header">
+            <div className="card-title">Daily Missions</div>
+            <div className="badge-live"><span className="dot" />Active</div>
+          </div>
+          <div className="mission-list">
+            {missions.map((mission) => (
+              <a key={mission.title} className="mission-item" href={mission.path}>
+                <span>{mission.title}</span>
+                <strong>{mission.reward}</strong>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="card-header">
+            <div className="card-title">Recommended Flow</div>
+            <div className="badge-live"><span className="dot" />3 steps</div>
+          </div>
+          <div className="flow-list">
+            <div><strong>1</strong><span>Warm up in Language Quest</span></div>
+            <div><strong>2</strong><span>Translate a real sentence</span></div>
+            <div><strong>3</strong><span>Save the best output as a favorite</span></div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

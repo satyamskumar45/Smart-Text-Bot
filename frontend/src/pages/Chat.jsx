@@ -1,132 +1,223 @@
-import { useEffect, useRef, useState } from "react";
-import { chat } from "../services/api";
+import { useMemo, useState } from "react";
+import { chat, translate } from "../services/api";
+import {
+  PHRASE_CATEGORIES,
+  QUIZ_QUESTIONS,
+  SUPPORTED_LANGUAGES,
+  VOCABULARY_WORDS,
+} from "../data/languageQuestData";
 
-function formatTime(date) {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const STARTER_STATS = { xp: 120, streak: 3, hearts: 5 };
+
+function getLevel(xp) {
+  return Math.max(1, Math.floor(xp / 120) + 1);
 }
 
 export default function Chat() {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
+  const [language, setLanguage] = useState("hi");
+  const [mode, setMode] = useState("lesson");
+  const [stats, setStats] = useState(STARTER_STATS);
+  const [quizIndex, setQuizIndex] = useState(0);
+  const [selected, setSelected] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [practiceText, setPracticeText] = useState("I want to learn something new today.");
+  const [practiceResult, setPracticeResult] = useState("");
+  const [coachNote, setCoachNote] = useState("");
   const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef(null);
-  const textareaRef = useRef(null);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  const languageName = SUPPORTED_LANGUAGES.find((item) => item.code === language)?.name || "Hindi";
+  const quizList = useMemo(() => QUIZ_QUESTIONS.filter((item) => item.language === language), [language]);
+  const quiz = quizList[quizIndex % Math.max(quizList.length, 1)] || QUIZ_QUESTIONS[0];
+  const vocab = VOCABULARY_WORDS.find((item) => item.language === language)?.entries || [];
+  const phraseGroups = PHRASE_CATEGORIES.filter((item) => ["greetings", "travel", "interview"].includes(item.key));
 
-  const autoResize = () => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
-    }
-  };
+  function award(amount) {
+    setStats((current) => ({ ...current, xp: current.xp + amount }));
+  }
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || loading) {
+  function answerQuiz(choice) {
+    if (selected) {
       return;
     }
 
-    const userMessage = { role: "user", text, time: new Date() };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+    const isCorrect = choice === quiz.answer;
+    setSelected(choice);
+    setFeedback(isCorrect ? "Correct. You earned 20 XP." : `Not quite. Answer: ${quiz.answer}`);
+    setStats((current) => ({
+      ...current,
+      xp: isCorrect ? current.xp + 20 : current.xp,
+      hearts: isCorrect ? current.hearts : Math.max(0, current.hearts - 1),
+    }));
+  }
+
+  function nextQuiz() {
+    setQuizIndex((current) => current + 1);
+    setSelected("");
+    setFeedback("");
+  }
+
+  async function runPractice() {
+    if (!practiceText.trim() || loading) {
+      return;
     }
+
     setLoading(true);
+    setPracticeResult("");
+    setCoachNote("");
 
     try {
-      const response = await chat(text);
-      const botMessage = {
-        role: "bot",
-        text: response.reply || response.response || "No response received.",
-        time: new Date(),
-      };
-      setMessages((prev) => [...prev, botMessage]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "bot",
-          text: "⚠ Failed to reach the server. Is the backend running?",
-          time: new Date(),
-        },
-      ]);
+      const translated = await translate({
+        text: practiceText,
+        source: "en",
+        target: language,
+        tone: "simple beginner-friendly",
+      });
+      setPracticeResult(translated.translation || "");
+
+      const coach = await chat(
+        `Give one short learning tip for this ${languageName} translation practice: ${practiceText}`
+      );
+      setCoachNote(coach.reply || "Say it aloud twice, then use it in your own sentence.");
+      award(15);
+    } catch (error) {
+      setCoachNote(error.message || "Practice is temporarily unavailable.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleKey = (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      send();
-    }
-  };
+  }
 
   return (
-    <div className="chat-layout">
-      <div className="chat-messages">
-        {messages.length === 0 ? (
-          <div className="chat-empty">
-            <div className="chat-empty-icon">💬</div>
-            <h3>Start a conversation</h3>
-            <p>Type a message below to chat with the AI assistant.</p>
+    <div className="quest-layout">
+      <div className="quest-hero">
+        <div>
+          <div className="hero-eyebrow">
+            <span className="hero-eyebrow-dot" />
+            Language Quest
           </div>
-        ) : (
-          messages.map((message, index) => (
-            <div key={index} className={`msg-wrapper ${message.role}`}>
-              <div className="msg-avatar">{message.role === "user" ? "U" : "🤖"}</div>
-              <div>
-                <div className="msg-bubble">{message.text}</div>
-                <div className="msg-time">{formatTime(message.time)}</div>
-              </div>
-            </div>
-          ))
-        )}
-
-        {loading && (
-          <div className="msg-wrapper bot">
-            <div className="msg-avatar">🤖</div>
-            <div className="msg-bubble">
-              <div className="typing-indicator">
-                <div className="typing-dot" />
-                <div className="typing-dot" />
-                <div className="typing-dot" />
-              </div>
-            </div>
+          <h1>Build a streak, learn useful phrases, and practice with AI.</h1>
+          <p>Short lessons, quick quizzes, and translation drills for everyday language confidence.</p>
+        </div>
+        <div className="quest-score-card">
+          <span>Level {getLevel(stats.xp)}</span>
+          <strong>{stats.xp} XP</strong>
+          <div className="quest-progress">
+            <div style={{ width: `${Math.min(100, stats.xp % 120)}%` }} />
           </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="chat-input-area">
-        <div className="chat-input-box">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(event) => {
-              setInput(event.target.value);
-              autoResize();
-            }}
-            onKeyDown={handleKey}
-            placeholder="Ask anything... (Enter to send, Shift+Enter for new line)"
-            rows={1}
-          />
-          <button
-            className="chat-send-btn"
-            onClick={send}
-            disabled={!input.trim() || loading}
-            title="Send message"
-          >
-            {loading ? <div className="spinner" style={{ borderTopColor: "#080c12" }} /> : "↑"}
-          </button>
         </div>
       </div>
+
+      <div className="quest-stats">
+        <div className="quest-stat"><span>Streak</span><strong>{stats.streak} days</strong></div>
+        <div className="quest-stat"><span>Hearts</span><strong>{stats.hearts}/5</strong></div>
+        <div className="quest-stat"><span>Target</span><strong>{languageName}</strong></div>
+      </div>
+
+      <div className="quest-toolbar">
+        <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+          {SUPPORTED_LANGUAGES.map((item) => (
+            <option key={item.code} value={item.code}>{item.name}</option>
+          ))}
+        </select>
+        {["lesson", "quiz", "practice"].map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={`btn ${mode === item ? "btn-primary" : "btn-ghost"}`}
+            onClick={() => setMode(item)}
+          >
+            {item[0].toUpperCase() + item.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {mode === "lesson" ? (
+        <div className="quest-grid">
+          <section className="card">
+            <div className="card-header">
+              <div className="card-title">Core Vocabulary</div>
+              <div className="badge-live"><span className="dot" />Daily</div>
+            </div>
+            <div className="lesson-list">
+              {vocab.map((item) => (
+                <article key={item.word} className="lesson-card">
+                  <strong>{item.word}</strong>
+                  <span>{item.meaning}</span>
+                  <p>{item.example}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="card-header">
+              <div className="card-title">Useful Phrase Packs</div>
+              <div className="badge-live"><span className="dot" />Ready</div>
+            </div>
+            <div className="lesson-list">
+              {phraseGroups.map((group) => (
+                <article key={group.key} className="lesson-card">
+                  <strong>{group.label}</strong>
+                  {group.phrases.slice(0, 2).map((phrase) => (
+                    <p key={phrase.text}>{phrase.text}: {phrase.translations[language] || phrase.text}</p>
+                  ))}
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {mode === "quiz" ? (
+        <section className="card quest-panel">
+          <div className="card-title">{quiz.question}</div>
+          <div className="quiz-options">
+            {quiz.choices.map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                className={`quiz-choice${selected === choice ? " selected" : ""}${selected && choice === quiz.answer ? " correct" : ""}`}
+                onClick={() => answerQuiz(choice)}
+              >
+                {choice}
+              </button>
+            ))}
+          </div>
+          {feedback ? (
+            <div className="quest-feedback">
+              <p>{feedback}</p>
+              <button type="button" className="btn btn-primary" onClick={nextQuiz}>Next challenge</button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {mode === "practice" ? (
+        <section className="card quest-panel">
+          <div className="card-header">
+            <div className="card-title">AI Translation Practice</div>
+            <div className="badge-live"><span className="dot" />Coach</div>
+          </div>
+          <label className="input-label">English sentence</label>
+          <textarea
+            className="textarea-main"
+            value={practiceText}
+            onChange={(event) => setPracticeText(event.target.value)}
+          />
+          <div className="action-row">
+            <div className="spacer" />
+            <button type="button" className="btn btn-primary" onClick={runPractice} disabled={loading}>
+              {loading ? "Checking..." : `Practice ${languageName}`}
+            </button>
+          </div>
+          {practiceResult ? (
+            <div className="practice-result-card">
+              <span>Translation</span>
+              <strong>{practiceResult}</strong>
+              {coachNote ? <p>{coachNote}</p> : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

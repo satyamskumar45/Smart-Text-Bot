@@ -61,7 +61,7 @@ def complete_json(system: str, user: str, model: str = "llama-3.1-8b-instant", d
         return json.dumps({"result": response})
 
 
-def translate_text(text: str, target_lang: str, source_lang: str = "auto") -> str:
+def translate_text(text: str, target_lang: str, source_lang: str = "auto", tone: str = "") -> str:
     if not text or not text.strip():
         raise ValueError("Text to translate cannot be empty")
 
@@ -83,10 +83,14 @@ def translate_text(text: str, target_lang: str, source_lang: str = "auto") -> st
     except Exception:
         raise ValueError(f"Unknown target language: {target_lang}")
 
+    tone_instruction = ""
+    if tone:
+        tone_instruction = f" Use a {tone} tone/register."
+
     system = "You are a professional translator. Provide accurate and natural translations."
     user = (
         f"Translate the following text from {source_label} to {target_label}. "
-        f"Only return the translated text without any explanation:\n\n{text}"
+        f"{tone_instruction} Only return the translated text without any explanation:\n\n{text}"
     )
 
     try:

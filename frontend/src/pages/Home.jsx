@@ -5,8 +5,8 @@ const features = [
     to: "/chat",
     color: "teal",
     icon: "💬",
-    title: "AI Chat",
-    desc: "Natural language conversations powered by GPT. Ask anything, get intelligent answers in real time.",
+    title: "Language Quest",
+    desc: "Practice with lessons, quizzes, XP, streaks, and AI-assisted translation coaching.",
   },
   {
     to: "/translate",
