@@ -70,12 +70,23 @@ export default function Translate() {
 
   return (
     <div className="translate-layout">
-      <div className="page-header">
-        <h1>Translation Studio</h1>
-        <p>Translate text, choose tone, and compare formal, informal, and simple versions.</p>
-      </div>
+      <section className="translate-hero">
+        <div>
+          <div className="hero-eyebrow">
+            <span className="hero-eyebrow-dot" />
+            Translation Studio
+          </div>
+          <h1>Translate with tone, context, and polished alternatives.</h1>
+          <p>Pick languages, choose a writing style, and compare formal, informal, and simple versions in one clean workspace.</p>
+        </div>
+        <div className="translate-hero-stat">
+          <span>Characters</span>
+          <strong>{input.length}</strong>
+          <small>{input.trim() ? "Ready to translate" : "Waiting for text"}</small>
+        </div>
+      </section>
 
-      <div className="card">
+      <div className="translate-card">
         <div className="translate-controls">
           <label>
             <span>From</span>
@@ -86,7 +97,7 @@ export default function Translate() {
               ))}
             </select>
           </label>
-          <button type="button" className="swap-btn" onClick={swap} title="Swap languages">SW</button>
+          <button type="button" className="swap-btn translate-swap" onClick={swap} title="Swap languages">Swap</button>
           <label>
             <span>To</span>
             <select value={toLang} onChange={(event) => setToLang(event.target.value)}>
@@ -106,9 +117,12 @@ export default function Translate() {
           </label>
         </div>
 
-        <div className="dual-area">
+        <div className="translate-editor">
           <div className="dual-pane">
-            <div className="dual-pane-label">Source</div>
+            <div className="dual-pane-label">
+              <span>Source</span>
+              <small>{fromLang === "auto" ? "Auto detect" : fromLang.toUpperCase()}</small>
+            </div>
             <textarea
               className="textarea-main"
               value={input}
@@ -116,9 +130,11 @@ export default function Translate() {
               placeholder="Enter text to translate..."
             />
           </div>
-          <div className="dual-area-divider" />
           <div className="dual-pane">
-            <div className="dual-pane-label">Translation</div>
+            <div className="dual-pane-label">
+              <span>Translation</span>
+              <small>{toLang.toUpperCase()} · {tone}</small>
+            </div>
             <textarea
               className="textarea-output"
               value={output}
@@ -128,11 +144,14 @@ export default function Translate() {
           </div>
         </div>
 
-        <div className="action-row">
+        <div className="translate-actions">
           <button type="button" className="btn btn-ghost" onClick={() => copy(output, "main")}>
             {copied === "main" ? "Copied" : "Copy"}
           </button>
-          <div className="spacer" />
+          <div className="translate-meta">
+            <span>{input.trim().split(/\s+/).filter(Boolean).length} words</span>
+            <span>{tone.replace(" conversational", "")}</span>
+          </div>
           <button type="button" className="btn btn-primary" onClick={run} disabled={loading || !input.trim()}>
             {loading ? "Translating..." : "Translate"}
           </button>
@@ -141,7 +160,7 @@ export default function Translate() {
 
       <div className="variant-grid">
         {["formal", "informal", "simple"].map((key) => (
-          <article key={key} className="variant-card">
+          <article key={key} className={`variant-card translate-variant translate-variant-${key}`}>
             <div>
               <span>{key}</span>
               <button type="button" onClick={() => copy(variants[key], key)}>
