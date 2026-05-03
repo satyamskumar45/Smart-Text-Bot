@@ -3,15 +3,15 @@ import os
 import re
 from logging import StreamHandler
 
-from flask import Flask, jsonify, request, current_app
-from utils.response import error_response
-from config.error_handlers import register_error_handlers
+from flask import Flask, request, current_app
 from flask_cors import CORS
 from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
 
 from config.settings import Settings
+from config.error_handlers import register_error_handlers
 from database.db import init_db
+
 from routes.auth_routes import auth_bp
 from routes.chatbot_routes import chatbot_bp
 from routes.dashboard_routes import dashboard_bp
@@ -22,42 +22,21 @@ from routes.summarize_routes import summarize_bp
 from routes.translate_routes import translate_bp
 from routes.voice_routes import voice_bp
 
+
 # ================= VALIDATION =================
 def _validate_required_settings():
     if not Settings.JWT_SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY environment variable is required.")
-    # Do not require MONGO_URI at startup to allow the app to boot without a DB during
-    # early deployment steps. DB initialization is attempted in `init_db()` and
-    # failures are logged; endpoints must handle DB unavailability.
-
-
-# ================= CORS CHECK =================
-def _is_allowed_origin(origin):
-    if not origin:
-        return False
-
-    allowed_exact = {
-        "https://smart-text-bot.pages.dev",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    }
-
-    if origin in allowed_exact:
-        return True
-
-    # ✅ Allow Cloudflare preview URLs
-    return bool(re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin))
 
 
 # ================= APP FACTORY =================
 def create_app():
     _validate_required_settings()
 
-    # Logging setup
+    # ================= LOGGING =================
     level = getattr(Settings, "LOG_LEVEL", "INFO")
     numeric_level = getattr(logging, level.upper(), logging.INFO)
 
-    # Ensure we don't duplicate handlers when reloading in dev
     logging.root.handlers.clear()
     handler = StreamHandler()
     handler.setLevel(numeric_level)
@@ -69,26 +48,41 @@ def create_app():
     app.config.from_object(Settings)
     app.config["JSON_SORT_KEYS"] = False
 
-    # ================= CORS =================
-    allowed_origins_env = os.getenv(
-        "ALLOWED_ORIGINS",
-        "https://smart-text-bot.pages.dev,http://localhost:5173,http://127.0.0.1:5173",
+    # ================= CORS (FINAL FIX) =================
+    FRONTEND_URL = "https://5664ca3c.smart-text-bot.pages.dev"
+
+    CORS(
+        app,
+        resources={r"/*": {"origins": [FRONTEND_URL]}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
-    allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
-    # Allow Cloudflare preview pattern as well
-    allowed_origins.append(r"^https://.*\\.smart-text-bot\\.pages\\.dev$")
 
-    CORS(app, origins=allowed_origins, supports_credentials=True)
+    # 🔥 HARD CORS FIX (guarantees preflight works)
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get("Origin")
 
-    # Init DB (attempt; will raise if misconfigured)
+        if origin and (
+            origin == FRONTEND_URL
+            or re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin)
+        ):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+
+        return response
+
+    # ================= DB INIT =================
     try:
         init_db()
     except Exception:
         app.logger.exception("Database initialization failed during startup")
 
-    # ================= LOG REQUESTS =================
+    # ================= REQUEST LOGGING =================
     @app.before_request
-    def _log_request():
+    def log_request():
         current_app.logger.info("%s %s", request.method, request.path)
 
     # ================= HEALTH =================
@@ -107,7 +101,7 @@ def create_app():
     app.register_blueprint(image_bp)
     app.register_blueprint(voice_bp)
 
-    # Register centralized error handlers
+    # ================= ERROR HANDLERS =================
     register_error_handlers(app)
 
     return app
@@ -115,6 +109,7 @@ def create_app():
 
 # ================= ENTRY =================
 app = create_app()
+
 
 @app.route("/routes")
 def list_routes():
