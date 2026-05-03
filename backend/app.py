@@ -1,7 +1,9 @@
+print("🔥 RENDER NEW VERSION LOADED 🔥")
+import logging
 import os
+import re
 
-from flask import Flask, jsonify
-from flask_cors import CORS
+from flask import Flask, jsonify, request, current_app
 from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
 
@@ -17,32 +19,7 @@ from routes.summarize_routes import summarize_bp
 from routes.translate_routes import translate_bp
 from routes.voice_routes import voice_bp
 
-
-def _cors_origins():
-    """
-    Returns allowed CORS origins.
-    - Uses FRONTEND_ORIGINS env if provided
-    - Falls back to safe defaults for local + production
-    """
-
-    env_origins = os.getenv("FRONTEND_ORIGINS", "")
-
-    if env_origins:
-        return [
-            origin.strip()
-            for origin in env_origins.split(",")
-            if origin.strip()
-        ]
-
-    # Default fallback (VERY IMPORTANT for your case)
-    return [
-        "https://smart-text-bot.pages.dev",
-        "https://*.smart-text-bot.pages.dev",  # allow preview deployments
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
-
-
+# ================= VALIDATION =================
 def _validate_required_settings():
     if not Settings.JWT_SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY environment variable is required.")
@@ -50,35 +27,83 @@ def _validate_required_settings():
         raise RuntimeError("MONGO_URI environment variable is required.")
 
 
+# ================= CORS CHECK =================
+def _is_allowed_origin(origin):
+    if not origin:
+        return False
+
+    allowed_exact = {
+        "https://smart-text-bot.pages.dev",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }
+
+    if origin in allowed_exact:
+        return True
+
+    # ✅ Allow Cloudflare preview URLs
+    return bool(re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin))
+
+
+# ================= APP FACTORY =================
 def create_app():
     _validate_required_settings()
-    # Configure logging early so errors surface in Render logs
-    import logging
 
+    # Logging setup
     level = getattr(Settings, "LOG_LEVEL", "INFO")
     numeric_level = getattr(logging, level.upper(), logging.INFO)
+
     handler = logging.StreamHandler()
     handler.setLevel(numeric_level)
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    handler.setFormatter(formatter)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+
     logging.root.setLevel(numeric_level)
     logging.root.addHandler(handler)
 
+    # Init DB
     init_db()
 
     app = Flask(__name__)
     app.config["JSON_SORT_KEYS"] = False
 
-    CORS(
-        app,
-        resources={r"/*": {"origins": _cors_origins()}},
-        supports_credentials=True,
-    )
+    # ================= CORS (MANUAL FIX) =================
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get("Origin")
 
+        if _is_allowed_origin(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+
+        return response
+
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = app.make_response("")
+            origin = request.headers.get("Origin")
+
+            if _is_allowed_origin(origin):
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+
+            return response
+
+    # ================= LOG REQUESTS =================
+    @app.before_request
+    def _log_request():
+        current_app.logger.info("%s %s", request.method, request.path)
+
+    # ================= HEALTH =================
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
+    # ================= ROUTES =================
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(chatbot_bp)
@@ -89,6 +114,7 @@ def create_app():
     app.register_blueprint(image_bp)
     app.register_blueprint(voice_bp)
 
+    # ================= ERROR HANDLERS =================
     @app.errorhandler(RuntimeError)
     def handle_runtime_error(error):
         return jsonify({"status": "fail", "message": str(error)}), 500
@@ -104,11 +130,15 @@ def create_app():
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
         app.logger.exception("Unhandled server error")
-        return jsonify({"status": "fail", "message": str(error) if app.debug else "Internal server error."}), 500
+        return jsonify({
+            "status": "fail",
+            "message": str(error) if app.debug else "Internal server error."
+        }), 500
 
     return app
 
 
+# ================= ENTRY =================
 app = create_app()
 
 if __name__ == "__main__":
