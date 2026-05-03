@@ -23,7 +23,7 @@ const navItems = [
   { to: "/sentiment", icon: "S", label: "Sentiment" },
   { to: "/summarize", icon: "M", label: "Summarizer" },
   { to: "/pipeline", icon: "P", label: "Pipeline" },
-  { to: "/image-scan", icon: "I", label: "Image Scanner" },
+  { to: "/image-scan", icon: "G", label: "Grammar" },
   { to: "/admin", icon: "A", label: "Admin", role: "admin" },
 ];
 
@@ -35,7 +35,7 @@ const pageTitles = {
   "/sentiment": "Sentiment Analysis",
   "/summarize": "Text Summarizer",
   "/pipeline": "Document Pipeline",
-  "/image-scan": "Image Scanner",
+  "/image-scan": "Grammar & Rewriter",
   "/admin": "Admin",
   "/login": "Login",
   "/signup": "Signup",

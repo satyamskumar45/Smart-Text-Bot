@@ -120,26 +120,31 @@ def summarize_text(text: str):
 def pipeline():
     try:
         file = request.files.get("file")
+        manual_text = (request.form.get("text") or request.form.get("manual_text") or "").strip()
         target_lang = request.form.get("target_lang", "en")
 
-        if not file:
-            return error("No file uploaded", 400)
+        if not file and not manual_text:
+            return error("Upload an image or paste text to run the pipeline", 400)
 
         print("\n[PIPELINE] Started")
 
-        try:
-            image_bytes = file.read()
-            raw_text = ocr_service.extract_text_simple(image_bytes, preprocess=True)
-            if not raw_text.strip():
-                raise OCRError("No text detected in image")
-            print(f"[PIPELINE] OCR complete: {len(raw_text)} chars")
-        except OCRError as exc:
-            print(f"[PIPELINE] OCR unavailable or failed: {exc}")
-            message = str(exc)
-            status_code = 503 if "currently unavailable" in message else 500
-            return error(message, status_code)
-        except Exception as exc:
-            return error(f"OCR failed: {str(exc)}", 500)
+        if manual_text:
+            raw_text = manual_text
+            print(f"[PIPELINE] Manual text provided: {len(raw_text)} chars")
+        else:
+            try:
+                image_bytes = file.read()
+                raw_text = ocr_service.extract_text_simple(image_bytes, preprocess=True)
+                if not raw_text.strip():
+                    raise OCRError("No text detected in image")
+                print(f"[PIPELINE] OCR complete: {len(raw_text)} chars")
+            except OCRError as exc:
+                print(f"[PIPELINE] OCR unavailable or failed: {exc}")
+                message = str(exc)
+                status_code = 503 if "currently unavailable" in message else 500
+                return error(f"{message} You can paste text into the pipeline instead.", status_code)
+            except Exception as exc:
+                return error(f"OCR failed: {str(exc)}", 500)
 
         cleaned = clean_text(raw_text)
         noise_free = remove_noise(cleaned)

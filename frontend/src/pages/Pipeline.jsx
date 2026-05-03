@@ -1,217 +1,157 @@
 import { useState } from "react";
-import { pipeline } from "../services/api";
 import LANGUAGES from "../data/languages";
+import { pipeline } from "../services/api";
 
 const STEPS = [
-  { key: "ocr", label: "OCR Extraction", desc: "Read text from the uploaded image" },
-  { key: "translate", label: "Translation", desc: "Convert the content to the target language" },
-  { key: "summarize", label: "Summarization", desc: "Generate a compact readable recap" },
+  ["Input", "Upload image or paste text"],
+  ["Structure", "Clean and organize content"],
+  ["Translate", "Convert to target language"],
+  ["Summarize", "Create a compact recap"],
 ];
 
 export default function Pipeline() {
-  const [image, setImage] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [file, setFile] = useState(null);
+  const [manualText, setManualText] = useState("");
+  const [preview, setPreview] = useState("");
   const [targetLang, setTargetLang] = useState("en");
-  const [loading, setLoading] = useState(false);
-  const [activeStep, setActiveStep] = useState(null);
   const [result, setResult] = useState(null);
-  const [copiedKey, setCopiedKey] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleFile = (file) => {
-    if (!file) return;
-    setImage(file);
-    setPreview(URL.createObjectURL(file));
+  function chooseFile(nextFile) {
+    setFile(nextFile || null);
+    setPreview(nextFile ? URL.createObjectURL(nextFile) : "");
     setResult(null);
     setError("");
-  };
+  }
 
-  const run = async () => {
-    if (!image) return;
-    setLoading(true);
-    setResult(null);
-    setError("");
-
-    for (const step of STEPS) {
-      setActiveStep(step.key);
-      await new Promise((resolve) => window.setTimeout(resolve, 250));
+  async function run() {
+    if (!file && !manualText.trim()) {
+      setError("Upload an image or paste text first.");
+      return;
     }
+
+    setLoading(true);
+    setError("");
+    setResult(null);
 
     try {
-      const response = await pipeline(image, targetLang);
+      const response = await pipeline(file, targetLang, manualText.trim());
       setResult(response);
     } catch (err) {
-      console.error("[PIPELINE ERROR]", err);
-      setError(err.message || "Pipeline failed");
+      setError(err.message || "Pipeline failed. Paste text directly if OCR is unavailable on the server.");
     } finally {
       setLoading(false);
-      setActiveStep(null);
     }
-  };
+  }
 
-  const copy = async (value, key) => {
-    if (!value) return;
-    await navigator.clipboard.writeText(value);
-    setCopiedKey(key);
-    window.setTimeout(() => setCopiedKey(null), 1500);
-  };
+  function copy(value) {
+    if (value) {
+      navigator.clipboard.writeText(value);
+    }
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div className="page-header">
-        <h1>Document Pipeline</h1>
-        <p>Upload an image, extract the text, translate it, and generate a summary in one connected flow.</p>
-      </div>
-
-      {error && (
-        <div className="card" style={{ borderColor: "var(--error, #ff5b6a)" }}>
-          <p style={{ margin: 0, color: "var(--error, #ff5b6a)" }}>{error}</p>
+    <div className="pipeline-page">
+      <section className="pipeline-hero">
+        <div>
+          <div className="hero-eyebrow">
+            <span className="hero-eyebrow-dot" />
+            Document Pipeline
+          </div>
+          <h1>Turn messy input into translated, summarized knowledge.</h1>
+          <p>Use image OCR when the server supports it, or paste text directly for a reliable no-OCR workflow.</p>
         </div>
-      )}
+        <select value={targetLang} onChange={(event) => setTargetLang(event.target.value)}>
+          {LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>Translate to {language.name}</option>
+          ))}
+        </select>
+      </section>
 
-      <div className="pipeline-steps">
-        {STEPS.map((step, index) => (
-          <div key={step.key} style={{ display: "flex", alignItems: "center", gap: 0 }}>
-            <div className={`pipeline-step ${activeStep === step.key ? "active" : result ? "done" : ""}`}>
-              <div className="step-icon">{result ? "OK" : step.label.slice(0, 2)}</div>
-              <div>
-                <div className="step-label">{step.label}</div>
-                <div className="step-desc">{step.desc}</div>
-              </div>
-            </div>
-            {index < STEPS.length - 1 && <div className="step-connector" />}
+      <div className="pipeline-timeline">
+        {STEPS.map(([title, desc], index) => (
+          <div key={title} className="pipeline-step-card">
+            <strong>{index + 1}</strong>
+            <span>{title}</span>
+            <p>{desc}</p>
           </div>
         ))}
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">
-            <span className="card-title-icon">DP</span>
-            Image Upload
+      {error ? <div className="auth-error">{error}</div> : null}
+
+      <section className="pipeline-input-grid">
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Image Input</div>
+            <div className="badge-live"><span className="dot" />Optional</div>
           </div>
-          <select
-            className="lang-select lang-select-dropdown"
-            value={targetLang}
-            onChange={(event) => setTargetLang(event.target.value)}
-            style={{ width: "auto", minWidth: 180 }}
-          >
-            {LANGUAGES.map((language) => (
-              <option key={language.code} value={language.code}>
-                Translate to: {language.name}
-              </option>
-            ))}
-          </select>
+          <label className="upload-zone">
+            {preview ? (
+              <div className="upload-preview">
+                <img src={preview} alt="preview" className="preview-img" />
+                <div className="upload-filename">{file?.name}</div>
+              </div>
+            ) : (
+              <div className="upload-empty">
+                <div>IMG</div>
+                <p>Click to upload PNG, JPG, JPEG, or WEBP</p>
+              </div>
+            )}
+            <input type="file" accept="image/*" hidden onChange={(event) => chooseFile(event.target.files?.[0])} />
+          </label>
         </div>
 
-        <div
-          className={`upload-zone ${dragOver ? "drag-over" : ""} ${image ? "has-file" : ""}`}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragOver(false);
-            handleFile(event.dataTransfer.files?.[0]);
-          }}
-          onClick={() => document.getElementById("pipeline-file-input").click()}
-        >
-          {preview ? (
-            <div className="upload-preview">
-              <img src={preview} alt="preview" className="preview-img" />
-              <div className="upload-filename">{image?.name}</div>
-            </div>
-          ) : (
-            <div className="upload-empty">
-              <div style={{ fontSize: 40, opacity: 0.4 }}>IMG</div>
-              <div style={{ fontSize: 14, color: "var(--text-2)", marginTop: 8 }}>
-                Drag and drop an image or click to browse
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-3)" }}>PNG, JPG, JPEG, WEBP</div>
-            </div>
-          )}
-          <input
-            id="pipeline-file-input"
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(event) => handleFile(event.target.files?.[0])}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Text Fallback</div>
+            <div className="badge-live"><span className="dot" />Recommended</div>
+          </div>
+          <textarea
+            className="textarea-main"
+            value={manualText}
+            onChange={(event) => setManualText(event.target.value)}
+            placeholder="Paste document text here. This works even when Tesseract OCR is not installed."
           />
         </div>
+      </section>
 
-        <div className="action-row" style={{ marginTop: 16 }}>
-          {image && (
-            <button
-              className="btn btn-ghost"
-              onClick={() => {
-                setImage(null);
-                setPreview(null);
-                setResult(null);
-                setError("");
-              }}
-            >
-              Clear
-            </button>
-          )}
-          <div className="spacer" />
-          <button className="btn btn-primary" onClick={run} disabled={loading || !image}>
-            {loading ? "Processing..." : "Run Pipeline"}
-          </button>
-        </div>
+      <div className="action-row">
+        <button type="button" className="btn btn-ghost" onClick={() => { chooseFile(null); setManualText(""); setResult(null); }}>
+          Clear
+        </button>
+        <div className="spacer" />
+        <button type="button" className="btn btn-primary" onClick={run} disabled={loading}>
+          {loading ? "Running pipeline..." : "Run Pipeline"}
+        </button>
       </div>
 
-      {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">
-                <span className="card-title-icon">OCR</span>
-                Extracted Text
+      {result ? (
+        <section className="pipeline-results">
+          {[
+            ["Extracted Text", result.extracted_text],
+            ["Translation", result.translation],
+            ["Summary", result.summary],
+          ].map(([title, value]) => (
+            <article key={title} className="card">
+              <div className="card-header">
+                <div className="card-title">{title}</div>
+                <button type="button" className="btn btn-ghost" onClick={() => copy(value)}>Copy</button>
               </div>
-              <button className="btn btn-ghost btn-icon" onClick={() => copy(result.extracted_text, "ocr")}>
-                {copiedKey === "ocr" ? "OK" : "CP"}
-              </button>
-            </div>
-            <div className="result-textbox">{result.extracted_text}</div>
-          </div>
-
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">
-                <span className="card-title-icon">TR</span>
-                Translation
-              </div>
-              <button className="btn btn-ghost btn-icon" onClick={() => copy(result.translation, "translation")}>
-                {copiedKey === "translation" ? "OK" : "CP"}
-              </button>
-            </div>
-            <div className="result-textbox">{result.translation}</div>
-          </div>
-
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">
-                <span className="card-title-icon">SU</span>
-                Summary
-              </div>
-              <button className="btn btn-ghost btn-icon" onClick={() => copy(result.summary, "summary")}>
-                {copiedKey === "summary" ? "OK" : "CP"}
-              </button>
-            </div>
-            <p style={{ fontSize: 14, lineHeight: 1.8, color: "var(--text-2)", marginBottom: 16 }}>{result.summary}</p>
-            <ul className="bullet-list">
-              {(result.bullets || []).map((bullet, index) => (
-                <li key={`${bullet}-${index}`} className="bullet-item">
-                  {bullet}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+              <div className="result-textbox">{value || "-"}</div>
+            </article>
+          ))}
+          {result.bullets?.length ? (
+            <article className="card">
+              <div className="card-title">Key Points</div>
+              <ul className="bullet-list">
+                {result.bullets.map((bullet, index) => <li key={`${bullet}-${index}`}>{bullet}</li>)}
+              </ul>
+            </article>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

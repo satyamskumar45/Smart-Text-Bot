@@ -192,24 +192,16 @@ export const summarize = (data) => api.post("/summarize", typeof data === "strin
 export const summarizeText = (data) => api.post("/summarize", typeof data === "string" ? { text: data } : data);
 
 export const sentiment = (data) => api.post("/sentiment", typeof data === "string" ? { text: data } : data);
+export const rewriteText = (data) => api.post("/grammar", typeof data === "string" ? { text: data } : data);
 
-// ================= IMAGE OCR =================
-export const scanImage = (file) => {
-  const formData = file instanceof FormData ? file : new FormData();
-  if (!(file instanceof FormData)) {
-    formData.append("image", file);
-  }
-
-  return api.post("/image-scan", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-};
-
-export const pipeline = (file, targetLang = "en") => {
+export const pipeline = (file, targetLang = "en", manualText = "") => {
   const formData = new FormData();
-  formData.append("file", file);
+  if (file) {
+    formData.append("file", file);
+  }
+  if (manualText) {
+    formData.append("manual_text", manualText);
+  }
   formData.append("target_lang", targetLang);
 
   return api.post("/pipeline", formData, {

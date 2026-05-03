@@ -33,8 +33,8 @@ const features = [
     to: "/image-scan",
     color: "pink",
     icon: "🖼️",
-    title: "Image Scanner",
-    desc: "Extract text and insights from images using OCR and AI.",
+    title: "Grammar & Rewriter",
+    desc: "Fix grammar, rewrite tone, simplify text, and create polished alternatives.",
   },
   {
     to: "/pipeline",

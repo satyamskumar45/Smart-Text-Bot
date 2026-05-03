@@ -28,11 +28,18 @@ def translate():
         response_data = {"translation": translated}
 
         if include_variants:
-            response_data["variants"] = {
-                "formal": translate_service(text, target, source=source, tone="formal"),
-                "informal": translate_service(text, target, source=source, tone="informal conversational"),
-                "simple": translate_service(text, target, source=source, tone="simple beginner-friendly"),
-            }
+            variants = {}
+            for key, variant_tone in {
+                "formal": "formal",
+                "informal": "informal conversational",
+                "simple": "simple beginner-friendly",
+            }.items():
+                try:
+                    variants[key] = translate_service(text, target, source=source, tone=variant_tone)
+                except Exception:
+                    current_app.logger.exception("Translate variant failed: %s", key)
+                    variants[key] = ""
+            response_data["variants"] = variants
 
         return success_response(data=response_data, message="Translation successful", status_code=200)
 
