@@ -1,277 +1,164 @@
 import axios from "axios";
 
-const API_BASE_URL = "https://smart-text-bot-backend-docker.onrender.com";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const USE_COOKIES = (import.meta.env.VITE_USE_COOKIES || "false") === "true";
 
-console.log("API BASE URL:", API_BASE_URL);
-
-const STORAGE_KEY = "smarttextbot.auth";
-const AUTH_EVENT = "smarttextbot:auth-change";
-
-const API = axios.create({
+const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
+  // If you use cookie-based (httpOnly) sessions, set VITE_USE_COOKIES=true.
+  // Otherwise, keep cookies off and use `Authorization: Bearer <token>`.
+  withCredentials: USE_COOKIES,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-let refreshPromise = null;
-
-function notifyAuthChanged() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(AUTH_EVENT));
-  }
-}
-
-function readStoredAuth() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch (_error) {
-    window.localStorage.removeItem(STORAGE_KEY);
-    return null;
-  }
-}
-
-function extractPayload(response) {
-  return response?.data?.data ?? response?.data;
-}
-
-function extractErrorMessage(error, fallbackMessage) {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.error ||
-    error?.message ||
-    fallbackMessage
-  );
-}
-
-function shouldBypassRefresh(config = {}) {
-  if (config.skipAuthRefresh) {
-    return true;
-  }
-
-  const url = config.url || "";
-  return ["/auth/login", "/auth/signup", "/auth/refresh"].some((path) => url.includes(path));
-}
-
-export function setAuthToken(token) {
-  if (token) {
-    API.defaults.headers.common.Authorization = `Bearer ${token}`;
-  } else {
-    delete API.defaults.headers.common.Authorization;
-  }
-}
-
-export function getStoredAuth() {
-  return readStoredAuth();
-}
-
-export function persistAuthSession(session) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  notifyAuthChanged();
-}
-
-export function clearStoredAuth() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(STORAGE_KEY);
-  notifyAuthChanged();
-}
-
-export function subscribeToAuthChanges(callback) {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  const handler = () => callback(readStoredAuth());
-  window.addEventListener(AUTH_EVENT, handler);
-  window.addEventListener("storage", handler);
-
-  return () => {
-    window.removeEventListener(AUTH_EVENT, handler);
-    window.removeEventListener("storage", handler);
-  };
-}
-
-async function refreshAccessToken() {
-  const storedAuth = readStoredAuth();
-  if (!storedAuth?.refreshToken) {
-    throw new Error("Missing refresh token.");
-  }
-
-  const response = await API.post(
-    "/auth/refresh",
-    { refresh_token: storedAuth.refreshToken },
-    { skipAuthRefresh: true }
-  );
-
-  const payload = extractPayload(response);
-  const nextSession = {
-    ...storedAuth,
-    token: payload.access_token,
-    refreshToken: payload.refresh_token || storedAuth.refreshToken,
-  };
-
-  setAuthToken(nextSession.token);
-  persistAuthSession(nextSession);
-  return nextSession;
-}
-
-const initialSession = readStoredAuth();
-if (initialSession?.token) {
-  setAuthToken(initialSession.token);
-}
-
-API.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error?.config;
-
-    if (
-      error?.response?.status !== 401 ||
-      !originalRequest ||
-      originalRequest._retry ||
-      shouldBypassRefresh(originalRequest)
-    ) {
-      return Promise.reject(error);
-    }
-
-    if (!refreshPromise) {
-      refreshPromise = refreshAccessToken()
-        .catch((refreshError) => {
-          clearStoredAuth();
-          setAuthToken(null);
-          throw refreshError;
-        })
-        .finally(() => {
-          refreshPromise = null;
-        });
-    }
-
+// Request interceptor: log outgoing requests
+api.interceptors.request.use(
+  (cfg) => {
     try {
-      const session = await refreshPromise;
-      originalRequest._retry = true;
-      originalRequest.headers = {
-        ...(originalRequest.headers || {}),
-        Authorization: `Bearer ${session.token}`,
-      };
-      return API(originalRequest);
-    } catch (refreshError) {
-      return Promise.reject(refreshError);
+      // eslint-disable-next-line no-console
+      console.debug("API Request:", cfg.method, cfg.url, cfg.data || cfg.params);
+    } catch (e) {
+      // ignore
     }
+    return cfg;
+  },
+  (err) => {
+    // eslint-disable-next-line no-console
+    console.error("API request error:", err);
+    return Promise.reject(err);
   }
 );
 
-export async function login({ email, password }) {
-  try {
-    const response = await API.post("/auth/login", { email, password }, { skipAuthRefresh: true });
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to log in."));
+// Response interceptor: centralize error logging and normalize error shape
+api.interceptors.response.use(
+  (res) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("API Response:", res.status, res.config.url, res.data);
+    } catch (e) {}
+    return res;
+  },
+  (error) => {
+    // Normalize network / server errors to include response data when present
+    const normalized = {
+      message: error.message || "Network or server error",
+      status: error.response ? error.response.status : null,
+      data: error.response ? error.response.data : null,
+    };
+    // eslint-disable-next-line no-console
+    console.error("API Error:", normalized);
+    return Promise.reject(normalized);
   }
-}
+);
 
-export async function signup({ email, password, name }) {
-  try {
-    const response = await API.post("/auth/signup", { email, password, name }, { skipAuthRefresh: true });
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to create account."));
+// ================= AUTH APIs =================
+export const signup = (data) => api.post("/auth/signup", data);
+export const login = (data) => api.post("/auth/login", data);
+export const logout = () => api.post("/auth/logout");
+export const getCurrentUser = () => api.get("/auth/me");
+
+// ================= AUTH STORAGE =================
+export const setAuthToken = (token) => {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
   }
-}
-
-export async function getCurrentUser() {
-  try {
-    const response = await API.get("/auth/me");
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to fetch current user."));
-  }
-}
-
-export async function logout(refreshToken) {
-  try {
-    const response = await API.post(
-      "/auth/logout",
-      refreshToken ? { refresh_token: refreshToken } : {},
-      { skipAuthRefresh: true }
-    );
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to log out."));
-  }
-}
-
-export async function fetchDashboard() {
-  try {
-    const response = await API.get("/dashboard");
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to load dashboard."));
-  }
-}
-
-export async function fetchAdminStats() {
-  try {
-    const response = await API.get("/admin/stats");
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to load admin stats."));
-  }
-}
-
-export async function fetchAdminUsers() {
-  try {
-    const response = await API.get("/admin/users");
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to load users."));
-  }
-}
-
-export async function updateAdminUserRole(userId, role) {
-  try {
-    const response = await API.patch(`/admin/users/${userId}/role`, { role });
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to update user role."));
-  }
-}
-
-export async function deleteAdminUser(userId) {
-  try {
-    const response = await API.delete(`/admin/users/${userId}`);
-    return extractPayload(response);
-  } catch (error) {
-    throw new Error(extractErrorMessage(error, "Unable to delete user."));
-  }
-}
-
-export const chat = async (message) => extractPayload(await API.post("/chat", { message }));
-
-export const translate = async (text, fromLang = "en", toLang = "hi") =>
-  extractPayload(await API.post("/translate", { text, source: fromLang, target: toLang }));
-
-export const sentiment = async (text) =>
-  extractPayload(await API.post("/sentiment", { text }));
-
-export const summarizeText = async (text) =>
-  extractPayload(await API.post("/summarize", { text }));
-
-export const scanImage = async (image) => {
-  const formData = new FormData();
-  formData.append("image", image);
-  return extractPayload(await API.post("/image-scan", formData));
 };
+
+export const persistAuthSession = (data) => {
+  try {
+    localStorage.setItem("auth", JSON.stringify(data));
+    // keep axios header in sync
+    if (data && data.access_token) {
+      setAuthToken(data.access_token);
+    } else if (data && data.token) {
+      setAuthToken(data.token);
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("persistAuthSession error", e);
+  }
+};
+
+export const getStoredAuth = () => {
+  const data = localStorage.getItem("auth");
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("getStoredAuth: failed to parse stored auth", e);
+    try {
+      localStorage.removeItem("auth");
+    } catch (remErr) {
+      // ignore
+    }
+    return null;
+  }
+};
+
+export const explainTranslation = (arg1, arg2, arg3, arg4) => {
+  let payload;
+  if (typeof arg1 === "object" && arg1 !== null) {
+    payload = arg1;
+  } else {
+    // support explainTranslation(text, translated_text, source_lang, target_lang)
+    payload = {
+      text: arg1,
+      translated_text: arg2,
+      source_lang: arg3,
+      target_lang: arg4,
+    };
+  }
+  return api.post("/translate", payload);
+};
+
+export const clearStoredAuth = () => {
+  localStorage.removeItem("auth");
+  delete api.defaults.headers.common["Authorization"];
+};
+
+export const subscribeToAuthChanges = (callback) => {
+  const wrapped = (evt) => callback(evt);
+  window.addEventListener("storage", wrapped);
+  return () => window.removeEventListener("storage", wrapped);
+};
+
+// ================= DASHBOARD =================
+export const fetchDashboard = () => api.get("/dashboard");
+
+// ================= CHAT =================
+export const chat = (data) => api.post("/chat", data);
+
+// ================= AI FEATURES =================
+export const translate = (data) => api.post("/translate", data);
+
+// BOTH names supported to avoid breaking code
+export const summarize = (data) => api.post("/summarize", data);
+export const summarizeText = (data) => api.post("/summarize", data);
+
+export const sentiment = (data) => api.post("/sentiment", data);
+
+// ================= IMAGE OCR =================
+export const scanImage = (formData) =>
+  api.post("/image/scan", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
+// ================= ADMIN =================
+export const fetchAdminStats = () => api.get("/admin/stats");
+export const fetchAdminUsers = () => api.get("/admin/users");
+
+export const updateAdminUserRole = (userId, role) =>
+  api.put(`/admin/users/${userId}/role`, { role });
+
+export const deleteAdminUser = (userId) =>
+  api.delete(`/admin/users/${userId}`);
+
+// ================= EXPORT DEFAULT =================
+export default api;

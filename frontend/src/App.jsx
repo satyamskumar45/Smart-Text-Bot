@@ -11,11 +11,8 @@ import Sentiment from "./pages/Sentiment";
 import Signup from "./pages/Signup";
 import Summarizer from "./pages/Summarizer";
 import Translate from "./pages/Translate";
+import { API_BASE_URL } from "./services/api";
 import "./style.css";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://smart-text-bot-backend-docker.onrender.com";
 
 const navItems = [
   { to: "/dashboard", icon: "D", label: "Dashboard" },
