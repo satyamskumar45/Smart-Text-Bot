@@ -1,11 +1,13 @@
 import json
 import os
+import logging
 
 from groq import Groq
 
 from config.settings import Settings
 
 
+logger = logging.getLogger(__name__)
 _client = None
 
 
@@ -24,16 +26,20 @@ def _get_client():
 
 
 def complete(system: str, user: str, model: str = "llama-3.1-8b-instant", temperature: float = 0.7) -> str:
-    response = _get_client().chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=temperature,
-    )
+    try:
+        response = _get_client().chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=temperature,
+        )
 
-    return response.choices[0].message.content.strip()  # type: ignore[union-attr]
+        return response.choices[0].message.content.strip()  # type: ignore[union-attr]
+    except Exception as e:
+        logger.exception("Groq API call failed")
+        raise RuntimeError("GROQ API error") from e
 
 
 def complete_json(system: str, user: str, model: str = "llama-3.1-8b-instant", default_structure=None) -> str:
@@ -59,8 +65,23 @@ def translate_text(text: str, target_lang: str, source_lang: str = "auto") -> st
     if not text or not text.strip():
         raise ValueError("Text to translate cannot be empty")
 
-    source_label = "the source language" if source_lang.lower() == "auto" else Settings.get_language_name(source_lang)
-    target_label = Settings.get_language_name(target_lang)
+    if not target_lang or not isinstance(target_lang, str):
+        raise ValueError("target_lang is required")
+
+    # Resolve language labels safely
+    try:
+        source_label = "the source language" if source_lang.lower() == "auto" else Settings.get_language_name(source_lang)
+    except Exception:
+        source_label = "the source language"
+
+    try:
+        target_label = Settings.get_language_name(target_lang)
+        if not target_label:
+            raise ValueError(f"Unknown target language: {target_lang}")
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError(f"Unknown target language: {target_lang}")
 
     system = "You are a professional translator. Provide accurate and natural translations."
     user = (
@@ -68,4 +89,11 @@ def translate_text(text: str, target_lang: str, source_lang: str = "auto") -> st
         f"Only return the translated text without any explanation:\n\n{text}"
     )
 
-    return complete(system, user)
+    try:
+        return complete(system, user)
+    except RuntimeError:
+        # Propagate Groq-related runtime errors for the route to catch and handle
+        raise
+    except Exception as e:
+        logger.exception("Unexpected error during translation")
+        raise RuntimeError("Translation failed") from e

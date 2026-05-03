@@ -146,15 +146,37 @@ def _legacy_user_payload(user):
     if not user:
         return None
     role = user.get("role") or ("guest" if user.get("is_guest") else "user")
+    # Normalize id (handle both 'id' and '_id') and ensure string
+    raw_id = user.get("id") or user.get("_id")
+    try:
+        id_str = str(raw_id) if raw_id is not None else None
+    except Exception:
+        id_str = None
+
+    # Ensure datetimes are JSON-serializable strings when present
+    created_at = user.get("created_at")
+    if hasattr(created_at, "isoformat"):
+        try:
+            created_at = created_at.isoformat()
+        except Exception:
+            created_at = None
+
+    updated_at = user.get("updated_at")
+    if hasattr(updated_at, "isoformat"):
+        try:
+            updated_at = updated_at.isoformat()
+        except Exception:
+            updated_at = None
+
     return {
-        "id": user["id"],
+        "id": id_str,
         "email": user.get("email"),
         "password_hash": user.get("password"),
         "display_name": user.get("name") or "",
         "role": role,
         "is_active": True,
-        "created_at": user.get("created_at"),
-        "updated_at": user.get("updated_at"),
+        "created_at": created_at,
+        "updated_at": updated_at,
     }
 
 

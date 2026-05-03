@@ -1,7 +1,7 @@
 
 from flask import Blueprint, request, current_app
 from services.chatbot_service import translate as translate_service
-from utils.response import success, error
+from utils.response import success_response, error_response
 
 translate_bp = Blueprint("translate", __name__)
 
@@ -10,13 +10,27 @@ translate_bp = Blueprint("translate", __name__)
 def translate():
     try:
         data = request.get_json(silent=True) or {}
-        text = data.get("text")
-        target = data.get("target")
+        text = (data.get("text") or "").strip()
+        target = (data.get("target") or data.get("target_lang") or "").strip()
+
+        if not text:
+            current_app.logger.info("Translate called without text")
+            return error_response(message="'text' is required", status_code=400)
+
+        if not target:
+            current_app.logger.info("Translate called without target language")
+            return error_response(message="'target' language is required", status_code=400)
+
         translated = translate_service(text, target)
-        return success({"translation": translated}, status_code=200)
+        return success_response(data={"translation": translated}, message="Translation successful", status_code=200)
+
     except ValueError as ve:
         current_app.logger.info("Translate validation error: %s", ve)
-        return error(message=str(ve), status_code=400)
+        return error_response(message=str(ve), status_code=400)
+    except RuntimeError as re:
+        # Likely configuration issue (e.g., missing API key)
+        current_app.logger.exception("Translate runtime error: %s", re)
+        return error_response(message="Translation service misconfigured", status_code=500)
     except Exception as exc:
         current_app.logger.exception("Translate error")
-        return error(message="Translation failed", status_code=500)
+        return error_response(message="Translation failed", status_code=500)

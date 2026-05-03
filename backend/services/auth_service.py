@@ -12,8 +12,6 @@ from utils.jwt_helper import create_access_token
 
 from validators.auth_validator import validate_login_payload, validate_signup_payload
 
-from werkzeug.security import check_password_hash
-
 logger = logging.getLogger(__name__)
 
 
@@ -103,11 +101,9 @@ def authenticate_user(email, password, remember=False, user_agent=None, ip_addre
         if not password_hash:
             raise ValueError("Password not found in database")
 
-        # Correct password verification
-        if not check_password_hash(password_hash, validated["password"]):
-            # fallback if different hash system
-            if not check_password(validated["password"], password_hash):
-                raise ValueError("Invalid credentials")
+        # Correct password verification using project's bcrypt helper
+        if not check_password(validated["password"], password_hash):
+            raise ValueError("Invalid credentials")
 
         user_id = str(user.get("id") or user.get("_id"))
 
