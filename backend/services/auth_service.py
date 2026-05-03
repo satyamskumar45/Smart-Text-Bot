@@ -1,140 +1,183 @@
 import logging
 import secrets
 from datetime import datetime, timedelta
+
 from config.settings import Settings
 from models.user_model import create_user, get_user_by_email, get_user_by_id, update_user_last_active
 from models.guest_session_model import create_guest_session, convert_guest_to_user, update_guest_usage
 from models.refresh_token_model import store_refresh_token, find_refresh_token, revoke_refresh_token
+
 from utils.password_helper import hash_password, check_password
 from utils.jwt_helper import create_access_token
+
 from validators.auth_validator import validate_login_payload, validate_signup_payload
-from werkzeug.security import check_password_hash as werk_check_password_hash
+
+from werkzeug.security import check_password_hash
 
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------
+# Helpers
+# -----------------------------
+
 def _serialize_user(user):
     return {
-        'id': user['id'],
-        'email': user['email'],
-        'display_name': user['display_name'] or 'Learner',
-        'role': user['role'],
+        "id": str(user.get("id") or user.get("_id")),
+        "email": user.get("email"),
+        "display_name": user.get("display_name") or "Learner",
+        "role": user.get("role", "user"),
     }
 
 
 def _build_refresh_token(user_id, user_agent=None, ip_address=None, remember=False):
     token = secrets.token_urlsafe(48)
-    expires_at = datetime.utcnow() + timedelta(days=Settings.REMEMBER_ME_EXPIRES_DAYS if remember else Settings.REFRESH_TOKEN_EXPIRES_DAYS)
-    store_refresh_token(user_id, token, expires_at, user_agent=user_agent, ip_address=ip_address)
-    return token, expires_at
+    expires_at = datetime.utcnow() + timedelta(
+        days=Settings.REMEMBER_ME_EXPIRES_DAYS if remember else Settings.REFRESH_TOKEN_EXPIRES_DAYS
+    )
 
+    store_refresh_token(user_id, token, expires_at, user_agent=user_agent, ip_address=ip_address)
+
+    return token, expires_at.isoformat()
+
+
+# -----------------------------
+# Signup
+# -----------------------------
 
 def register_user(email, password, display_name=None, guest_session_id=None, remember=False, user_agent=None, ip_address=None):
     validated = validate_signup_payload(email, password)
-    existing = get_user_by_email(validated['email'])
-    if existing:
-        raise ValueError('Email already registered')
 
-    password_hash = hash_password(validated['password'])
-    user_id = create_user(validated['email'], password_hash, display_name)
+    # Prevent duplicate users
+    existing = get_user_by_email(validated["email"])
+    if existing:
+        raise ValueError("Email already registered")
+
+    password_hash = hash_password(validated["password"])
+    user_id = create_user(validated["email"], password_hash, display_name)
 
     if guest_session_id:
         convert_guest_to_user(guest_session_id, user_id)
 
-    access_token = create_access_token({'sub': str(user_id), 'role': 'user'})
-    refresh_token, refresh_expires = _build_refresh_token(user_id, user_agent=user_agent, ip_address=ip_address, remember=remember)
+    access_token = create_access_token({"sub": str(user_id), "role": "user"})
+    refresh_token, refresh_expires = _build_refresh_token(user_id, user_agent, ip_address, remember)
 
     return {
-        'user': _serialize_user({
-            'id': user_id,
-            'email': validated['email'],
-            'display_name': display_name,
-            'role': 'user',
-        }),
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'refresh_expires': refresh_expires,
+        "user": {
+            "id": str(user_id),
+            "email": validated["email"],
+            "display_name": display_name or "Learner",
+            "role": "user",
+        },
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "refresh_expires": refresh_expires,
     }
 
+
+# -----------------------------
+# Login (FIXED CORE)
+# -----------------------------
 
 def authenticate_user(email, password, remember=False, user_agent=None, ip_address=None):
     try:
         validated = validate_login_payload(email, password)
-        user = get_user_by_email(validated['email'])
-        if not user or not user.get('is_active'):
-            return None
 
-        # Prefer werkzeug's check, but fall back to bcrypt-based helper for existing hashes
-        password_ok = False
-        try:
-            # werk_check_password_hash expects (pwhash, password)
-            password_ok = werk_check_password_hash(user.get('password_hash') or '', validated['password'])
-        except Exception:
-            logger.debug("werkzeug check failed, falling back to bcrypt check", exc_info=True)
-            password_ok = check_password(validated['password'], user.get('password_hash') or '')
+        user = get_user_by_email(validated["email"])
 
-        if not password_ok:
-            return None
+        # User checks
+        if not user:
+            raise ValueError("User not found")
 
-        update_user_last_active(user['id'])
-        access_token = create_access_token({'sub': str(user['id']), 'role': user['role']})
-        refresh_token, refresh_expires = _build_refresh_token(user['id'], user_agent=user_agent, ip_address=ip_address, remember=remember)
+        if not user.get("is_active", True):
+            raise ValueError("User is inactive")
 
-        # Convert datetime to ISO string to avoid JSON serialization errors downstream
-        if hasattr(refresh_expires, 'isoformat'):
-            refresh_expires = refresh_expires.isoformat()
+        # Handle both password field names
+        password_hash = user.get("password_hash") or user.get("password")
+
+        if not password_hash:
+            raise ValueError("Password not found in database")
+
+        # Correct password verification
+        if not check_password_hash(password_hash, validated["password"]):
+            # fallback if different hash system
+            if not check_password(validated["password"], password_hash):
+                raise ValueError("Invalid credentials")
+
+        user_id = str(user.get("id") or user.get("_id"))
+
+        update_user_last_active(user_id)
+
+        access_token = create_access_token({
+            "sub": user_id,
+            "role": user.get("role", "user")
+        })
+
+        refresh_token, refresh_expires = _build_refresh_token(
+            user_id, user_agent, ip_address, remember
+        )
 
         return {
-            'user': _serialize_user(user),
-            'access_token': access_token,
-            'refresh_token': refresh_token,
-            'refresh_expires': refresh_expires,
+            "user": _serialize_user(user),
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "refresh_expires": refresh_expires,
         }
+
     except ValueError:
-        # validation errors should bubble up as None to let caller respond with 400
         raise
     except Exception:
         logger.exception("Error authenticating user")
-        # re-raise so route can return 500 and log appropriately
         raise
 
+
+# -----------------------------
+# Session Management
+# -----------------------------
 
 def get_user_session(refresh_token):
     if not refresh_token:
         return None
 
     record = find_refresh_token(refresh_token)
-    if not record or record.get('revoked') or record.get('expires_at') is None:
+
+    if not record or record.get("revoked") or not record.get("expires_at"):
         return None
 
-    if record['expires_at'] < datetime.utcnow():
+    if record["expires_at"] < datetime.utcnow():
         revoke_refresh_token(refresh_token)
         return None
 
-    user = get_user_by_id(record['user_id'])
-    if not user or not user.get('is_active'):
+    user = get_user_by_id(record["user_id"])
+
+    if not user or not user.get("is_active", True):
         revoke_refresh_token(refresh_token)
         return None
 
     return {
-        'user': _serialize_user(user),
-        'access_token': create_access_token({'sub': str(user['id']), 'role': user['role']}),
+        "user": _serialize_user(user),
+        "access_token": create_access_token({
+            "sub": str(user.get("id") or user.get("_id")),
+            "role": user.get("role", "user")
+        }),
     }
 
 
 def refresh_user_session(refresh_token):
-    session_payload = get_user_session(refresh_token)
-    if not session_payload:
+    session = get_user_session(refresh_token)
+
+    if not session:
         return None
 
     revoke_refresh_token(refresh_token)
-    new_refresh_token, refresh_expires = _build_refresh_token(session_payload['user']['id'])
+
+    new_token, refresh_expires = _build_refresh_token(session["user"]["id"])
 
     return {
-        'user': session_payload['user'],
-        'access_token': session_payload['access_token'],
-        'refresh_token': new_refresh_token,
-        'refresh_expires': refresh_expires,
+        "user": session["user"],
+        "access_token": session["access_token"],
+        "refresh_token": new_token,
+        "refresh_expires": refresh_expires,
     }
 
 
@@ -144,22 +187,36 @@ def logout_user(refresh_token):
     return True
 
 
+# -----------------------------
+# Guest Logic
+# -----------------------------
+
 def create_guest_profile():
     session_id = create_guest_session()
-    access_token = create_access_token({'sub': session_id, 'role': 'guest', 'guest': True})
+
+    access_token = create_access_token({
+        "sub": session_id,
+        "role": "guest",
+        "guest": True
+    })
+
     return {
-        'session_id': session_id,
-        'access_token': access_token,
-        'user': {
-            'role': 'guest',
-            'display_name': 'Guest Learner',
+        "session_id": session_id,
+        "access_token": access_token,
+        "user": {
+            "role": "guest",
+            "display_name": "Guest Learner",
         },
-        'role': 'guest',
+        "role": "guest",
     }
 
 
 def create_guest_access_token(session_id):
-    return create_access_token({'sub': session_id, 'role': 'guest', 'guest': True})
+    return create_access_token({
+        "sub": session_id,
+        "role": "guest",
+        "guest": True
+    })
 
 
 def track_guest_usage(session_id, module_type):
