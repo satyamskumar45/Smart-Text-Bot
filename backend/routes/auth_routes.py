@@ -2,7 +2,7 @@ import logging
 
 from flask import Blueprint, g, request, current_app
 
-from services.auth_service import register_user, authenticate_user, logout_user
+from services.auth_service import register_user, authenticate_user, logout_user, refresh_user_session
 from utils.response import success_response, error_response
 from utils.auth import auth_required, get_bearer_token
 
@@ -73,6 +73,22 @@ def login():
 @auth_required
 def me():
     return success_response(data={"user": g.current_user}, message="Current user", status_code=200)
+
+
+@auth_bp.route("/refresh", methods=["POST"])
+def refresh():
+    try:
+        data = request.get_json(silent=True) or {}
+        refresh_token = data.get("refresh_token") or request.cookies.get("refresh_token") or get_bearer_token()
+        result = refresh_user_session(refresh_token)
+
+        if not result:
+            return error_response(message="Invalid or expired refresh token", status_code=401)
+
+        return success_response(data=result, message="Session refreshed", status_code=200)
+    except Exception:
+        current_app.logger.exception("Refresh error")
+        return error_response(message="Internal server error", status_code=500)
 
 
 @auth_bp.route("/logout", methods=["POST"])

@@ -45,8 +45,43 @@ api.interceptors.response.use(
 
     return res.data;
   },
-  (error) => {
+  async (error) => {
     const responseData = error.response ? error.response.data : null;
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/auth/login") &&
+      !originalRequest.url?.includes("/auth/signup") &&
+      !originalRequest.url?.includes("/auth/refresh") &&
+      !originalRequest.url?.includes("/auth/logout")
+    ) {
+      const storedAuth = getStoredAuth();
+
+      if (storedAuth?.refreshToken) {
+        originalRequest._retry = true;
+
+        try {
+          const refreshedSession = await refreshSession(storedAuth.refreshToken);
+          const nextSession = {
+            token: refreshedSession.access_token,
+            refreshToken: refreshedSession.refresh_token || storedAuth.refreshToken,
+            user: refreshedSession.user || storedAuth.user || null,
+          };
+
+          persistAuthSession(nextSession);
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers.Authorization = `Bearer ${nextSession.token}`;
+
+          return api(originalRequest);
+        } catch (_refreshError) {
+          clearStoredAuth();
+        }
+      }
+    }
+
     // Normalize network / server errors to include response data when present
     const normalized = {
       message: responseData?.message || error.message || "Network or server error",
@@ -62,6 +97,7 @@ api.interceptors.response.use(
 // ================= AUTH APIs =================
 export const signup = (data) => api.post("/auth/signup", data);
 export const login = (data) => api.post("/auth/login", data);
+export const refreshSession = (refreshToken) => api.post("/auth/refresh", { refresh_token: refreshToken });
 export const logout = (refreshToken) => api.post("/auth/logout", { refresh_token: refreshToken });
 export const getCurrentUser = () => api.get("/auth/me");
 

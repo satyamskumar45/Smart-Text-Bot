@@ -38,6 +38,30 @@ export function AuthProvider({ children }) {
         if (ignore) {
           return;
         }
+        if (storedAuth.refreshToken) {
+          try {
+            const refreshedSession = await api.refreshSession(storedAuth.refreshToken);
+            if (ignore) {
+              return;
+            }
+
+            const nextToken = refreshedSession.access_token;
+            const nextSession = {
+              token: nextToken,
+              refreshToken: refreshedSession.refresh_token || storedAuth.refreshToken,
+              user: refreshedSession.user || storedAuth.user || null,
+            };
+
+            api.setAuthToken(nextToken);
+            api.persistAuthSession(nextSession);
+            setToken(nextToken);
+            setUser(nextSession.user);
+            return;
+          } catch (_refreshError) {
+            // Fall through and clear the stale local session.
+          }
+        }
+
         api.clearStoredAuth();
         api.setAuthToken(null);
         setToken(null);
