@@ -38,14 +38,20 @@ api.interceptors.response.use(
       // eslint-disable-next-line no-console
       console.debug("API Response:", res.status, res.config.url, res.data);
     } catch (e) {}
-    return res;
+
+    if (res.data && typeof res.data === "object" && "success" in res.data) {
+      return res.data.data || {};
+    }
+
+    return res.data;
   },
   (error) => {
+    const responseData = error.response ? error.response.data : null;
     // Normalize network / server errors to include response data when present
     const normalized = {
-      message: error.message || "Network or server error",
+      message: responseData?.message || error.message || "Network or server error",
       status: error.response ? error.response.status : null,
-      data: error.response ? error.response.data : null,
+      data: responseData,
     };
     // eslint-disable-next-line no-console
     console.error("API Error:", normalized);
@@ -56,7 +62,7 @@ api.interceptors.response.use(
 // ================= AUTH APIs =================
 export const signup = (data) => api.post("/auth/signup", data);
 export const login = (data) => api.post("/auth/login", data);
-export const logout = () => api.post("/auth/logout");
+export const logout = (refreshToken) => api.post("/auth/logout", { refresh_token: refreshToken });
 export const getCurrentUser = () => api.get("/auth/me");
 
 // ================= AUTH STORAGE =================
