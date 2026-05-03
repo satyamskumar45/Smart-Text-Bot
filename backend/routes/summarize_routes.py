@@ -1,6 +1,6 @@
 import json
-from flask import Blueprint, request, g
-from services.groq_service import complete_json
+from flask import Blueprint, request, g, current_app
+from services.chatbot_service import summarize as summarize_service
 from services.history_service import save_history_entry
 from services.auth_service import track_guest_usage
 from middleware.auth_middleware import optional_auth
@@ -28,12 +28,6 @@ def _read_summary_input():
 @summarize_bp.route('/summarize', methods=['POST'])
 @optional_auth
 def summarize():
-    """
-    Summarize provided text.
-    
-    Request: { "text": "..." }
-    Response: { "success": true, "data": { "summary": "...", "bullets": [...] }, "error": null }
-    """
     text, filename = _read_summary_input()
 
     if not text:
@@ -41,38 +35,8 @@ def summarize():
 
     data = request.get_json(silent=True) or {}
     mode = (request.form.get('mode') if request.form else data.get('mode', 'short')) or 'short'
-    mode = mode.strip().lower()
-    if mode not in {'short', 'detailed'}:
-        return error("Mode must be 'short' or 'detailed'", 400)
-
-    system = (
-        "You are an expert summarizer. Return a JSON object with three keys: "
-        "'paragraph' (a concise 2-3 sentence summary), "
-        "'detailed_summary' (a fuller paragraph summary), and "
-        "'bullets' (an array of 4-6 key bullet point strings). "
-        "Return ONLY the JSON object."
-    )
-    user = (
-        f"Summarize the following text in {mode} mode.\n"
-        "Keep the paragraph concise and make detailed_summary more complete.\n\n"
-        f"{text}"
-    )
-
     try:
-        raw = complete_json(
-            system,
-            user,
-            default_structure={'paragraph': '', 'detailed_summary': '', 'bullets': []},
-        )
-        result = json.loads(raw)
-        
-        summary_data = {
-            'summary': result.get('paragraph', ''),
-            'detailed_summary': result.get('detailed_summary') or result.get('paragraph', ''),
-            'bullets': result.get('bullets', []),
-            'mode': mode,
-            'document_name': filename,
-        }
+        result = summarize_service(text=text, mode=mode, filename=filename)
 
         current = getattr(g, 'current_user', None)
         if current:
@@ -81,17 +45,21 @@ def summarize():
                 guest_session_id=current.get('guest_session_id'),
                 module_type='summary',
                 input_text=text,
-                output_text=summary_data['summary'],
+                output_text=result['summary'],
                 metadata=json.dumps({
-                    'bullets': summary_data['bullets'],
-                    'detailed_summary': summary_data['detailed_summary'],
-                    'mode': mode,
+                    'bullets': result.get('bullets', []),
+                    'detailed_summary': result.get('detailed_summary', ''),
+                    'mode': result.get('mode', 'short'),
                     'document_name': filename,
                 }),
             )
             if current.get('guest_session_id'):
                 track_guest_usage(current.get('guest_session_id'), 'summaries')
-        
-        return success(summary_data)
+
+        return success(result)
+    except ValueError as ve:
+        current_app.logger.info("Summarize validation error: %s", ve)
+        return error(str(ve), 400)
     except Exception as exc:
+        current_app.logger.exception("Summarization failed")
         return error(f"Summarization failed: {exc}", 500)

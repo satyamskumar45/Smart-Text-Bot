@@ -1,13 +1,3 @@
-import json
-from flask import Blueprint, request
-from services.groq_service import complete_json
-from utils.response import success, error
-
-sentiment_bp = Blueprint('sentiment', __name__)
-
-
-@sentiment_bp.route('/sentiment', methods=['POST'])
-def sentiment():
     """
     Analyze sentiment of provided text.
     
@@ -30,18 +20,28 @@ def sentiment():
     )
     user = f"Analyze the sentiment of this text:\n\n{text}"
 
+import json
+from flask import Blueprint, request, current_app
+from services.chatbot_service import analyze_sentiment
+from utils.response import success, error
+
+sentiment_bp = Blueprint('sentiment', __name__)
+
+
+@sentiment_bp.route('/sentiment', methods=['POST'])
+def sentiment():
+    data = request.get_json(silent=True) or {}
+    text = (data.get('text') or '').strip()
+
+    if not text:
+        return error('No text provided', 400)
+
     try:
-        raw = complete_json(system, user)
-        result = json.loads(raw)
-        
-        sentiment_data = {
-            'sentiment': result.get('sentiment', 'neutral'),
-            'positive': float(result.get('positive', 0.33)),
-            'negative': float(result.get('negative', 0.33)),
-            'neutral': float(result.get('neutral', 0.34)),
-            'explanation': result.get('explanation', ''),
-        }
-        
+        sentiment_data = analyze_sentiment(text)
         return success(sentiment_data)
+    except ValueError as ve:
+        current_app.logger.info("Sentiment validation error: %s", ve)
+        return error(str(ve), 400)
     except Exception as exc:
+        current_app.logger.exception("Sentiment analysis failed")
         return error(f"Sentiment analysis failed: {exc}", 500)

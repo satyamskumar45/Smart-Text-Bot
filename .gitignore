@@ -1,4 +1,22 @@
-# Root Git ignore for production-ready repository
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+.venv/
+env/
+/.mypy_cache
+/.pytest_cache
+node_modules/
+dist/
+build/
+.DS_Store
+.env
+backend/.venv/
+frontend/node_modules/
+*.log
+/*.sqlite3
+/.vscode/# Root Git ignore for production-ready repository
 
 # Python virtual environments
 .venv/

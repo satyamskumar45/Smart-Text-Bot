@@ -1,4 +1,6 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, current_app
+from utils.response import success, error
+from services.grammar_service import correct_text
 
 grammar_bp = Blueprint("grammar", __name__)
 
@@ -6,15 +8,15 @@ grammar_bp = Blueprint("grammar", __name__)
 @grammar_bp.route("/grammar", methods=["POST"])
 def grammar():
     data = request.get_json(silent=True) or {}
-    text = data.get("text", "")
+    text = (data.get("text") or "").strip()
     if not text:
-        return jsonify({"status": "fail", "message": "text is required"}), 400
+        return error("text is required", 400)
 
     try:
-        import language_tool_python
-        tool = language_tool_python.LanguageTool("en-US")
-        matches = tool.check(text)
-        corrected = language_tool_python.utils.correct(text, matches)
-        return jsonify({"status": "success", "corrected": corrected})
-    except Exception as exc:
-        return jsonify({"status": "fail", "message": str(exc)}), 500
+        corrected = correct_text(text)
+        return success({"corrected": corrected}, status_code=200)
+    except ValueError as ve:
+        return error(str(ve), 400)
+    except Exception:
+        current_app.logger.exception("Grammar correction failed")
+        return error("Grammar correction failed", 500)
