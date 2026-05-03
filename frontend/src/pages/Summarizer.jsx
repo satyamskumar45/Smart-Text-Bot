@@ -14,7 +14,7 @@ export default function Summarizer() {
     setLoading(true);
     try {
       const data = await summarizeText(text);
-      setSummary(data.summary || "No summary returned.");
+      setSummary(data.summary || data.detailed_summary || "No summary returned.");
     } catch {
       setSummary("Unable to summarize this text right now.");
     } finally {

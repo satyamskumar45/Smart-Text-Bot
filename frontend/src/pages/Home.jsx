@@ -36,6 +36,13 @@ const features = [
     title: "Image Scanner",
     desc: "Extract text and insights from images using OCR and AI.",
   },
+  {
+    to: "/pipeline",
+    color: "teal",
+    icon: "DP",
+    title: "Document Pipeline",
+    desc: "Upload an image, extract text, translate it, and generate a summary in one flow.",
+  },
 ];
 
 export default function Home() {

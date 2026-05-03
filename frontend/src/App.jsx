@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import ImageScanner from "./pages/ImageScanner";
 import Login from "./pages/Login";
+import Pipeline from "./pages/Pipeline";
 import Sentiment from "./pages/Sentiment";
 import Signup from "./pages/Signup";
 import Summarizer from "./pages/Summarizer";
@@ -21,6 +22,7 @@ const navItems = [
   { to: "/translate", icon: "T", label: "Translate" },
   { to: "/sentiment", icon: "S", label: "Sentiment" },
   { to: "/summarize", icon: "M", label: "Summarizer" },
+  { to: "/pipeline", icon: "P", label: "Pipeline" },
   { to: "/image-scan", icon: "I", label: "Image Scanner" },
   { to: "/admin", icon: "A", label: "Admin", role: "admin" },
 ];
@@ -32,6 +34,7 @@ const pageTitles = {
   "/translate": "Translation",
   "/sentiment": "Sentiment Analysis",
   "/summarize": "Text Summarizer",
+  "/pipeline": "Document Pipeline",
   "/image-scan": "Image Scanner",
   "/admin": "Admin",
   "/login": "Login",
@@ -142,6 +145,7 @@ function ProtectedAppLayout() {
               <Route path="/translate" element={<Translate />} />
               <Route path="/sentiment" element={<Sentiment />} />
               <Route path="/summarize" element={<Summarizer />} />
+              <Route path="/pipeline" element={<Pipeline />} />
               <Route path="/image-scan" element={<ImageScanner />} />
               <Route
                 path="/admin"

@@ -15,6 +15,7 @@ from database.db import init_db
 from routes.auth_routes import auth_bp
 from routes.chatbot_routes import chatbot_bp
 from routes.dashboard_routes import dashboard_bp
+from routes.doc_pipeline import doc_pipeline_bp
 from routes.grammar_routes import grammar_bp
 from routes.image_routes import image_bp
 from routes.sentiment_routes import sentiment_bp
@@ -96,6 +97,7 @@ def create_app():
     # ================= ROUTES =================
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(doc_pipeline_bp)
     app.register_blueprint(chatbot_bp)
     app.register_blueprint(translate_bp)
     app.register_blueprint(grammar_bp)

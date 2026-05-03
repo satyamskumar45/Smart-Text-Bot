@@ -43,6 +43,11 @@ api.interceptors.response.use(
       return res.data.data || {};
     }
 
+    if (res.data && typeof res.data === "object" && res.data.status === "success") {
+      const { status, ...payload } = res.data;
+      return payload;
+    }
+
     return res.data;
   },
   async (error) => {
@@ -173,24 +178,42 @@ export const subscribeToAuthChanges = (callback) => {
 export const fetchDashboard = () => api.get("/dashboard");
 
 // ================= CHAT =================
-export const chat = (data) => api.post("/chat", data);
+export const chat = (data) => api.post("/chat", typeof data === "string" ? { message: data } : data);
 
 // ================= AI FEATURES =================
 export const translate = (data) => api.post("/translate", data);
 
 // BOTH names supported to avoid breaking code
-export const summarize = (data) => api.post("/summarize", data);
-export const summarizeText = (data) => api.post("/summarize", data);
+export const summarize = (data) => api.post("/summarize", typeof data === "string" ? { text: data } : data);
+export const summarizeText = (data) => api.post("/summarize", typeof data === "string" ? { text: data } : data);
 
-export const sentiment = (data) => api.post("/sentiment", data);
+export const sentiment = (data) => api.post("/sentiment", typeof data === "string" ? { text: data } : data);
 
 // ================= IMAGE OCR =================
-export const scanImage = (formData) =>
-  api.post("/image/scan", formData, {
+export const scanImage = (file) => {
+  const formData = file instanceof FormData ? file : new FormData();
+  if (!(file instanceof FormData)) {
+    formData.append("image", file);
+  }
+
+  return api.post("/image-scan", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
   });
+};
+
+export const pipeline = (file, targetLang = "en") => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("target_lang", targetLang);
+
+  return api.post("/pipeline", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
 
 // ================= ADMIN =================
 export const fetchAdminStats = () => api.get("/admin/stats");

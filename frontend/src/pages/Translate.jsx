@@ -25,7 +25,7 @@ export default function Translate() {
     setOutput("");
     try {
       const res = await translate({ text: input, source: fromLang, target: toLang });
-      setOutput(res?.data?.translation || res?.data?.translated || "");
+      setOutput(res?.translation || res?.translated || "");
     } catch {
       setOutput("⚠ Translation failed. Is the backend running?");
     } finally {
