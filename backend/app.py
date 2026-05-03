@@ -1,4 +1,4 @@
-print("🔥🔥🔥 NEW APP VERSION RUNNING 🔥🔥🔥")
+print("🔥 RENDER NEW VERSION LOADED 🔥")
 import logging
 import os
 import re
