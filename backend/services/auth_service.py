@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timedelta
 from config.settings import Settings
@@ -7,6 +8,9 @@ from models.refresh_token_model import store_refresh_token, find_refresh_token, 
 from utils.password_helper import hash_password, check_password
 from utils.jwt_helper import create_access_token
 from validators.auth_validator import validate_login_payload, validate_signup_payload
+from werkzeug.security import check_password_hash as werk_check_password_hash
+
+logger = logging.getLogger(__name__)
 
 
 def _serialize_user(user):
@@ -54,24 +58,45 @@ def register_user(email, password, display_name=None, guest_session_id=None, rem
 
 
 def authenticate_user(email, password, remember=False, user_agent=None, ip_address=None):
-    validated = validate_login_payload(email, password)
-    user = get_user_by_email(validated['email'])
-    if not user or not user.get('is_active'):
-        return None
+    try:
+        validated = validate_login_payload(email, password)
+        user = get_user_by_email(validated['email'])
+        if not user or not user.get('is_active'):
+            return None
 
-    if not check_password(validated['password'], user['password_hash']):
-        return None
+        # Prefer werkzeug's check, but fall back to bcrypt-based helper for existing hashes
+        password_ok = False
+        try:
+            # werk_check_password_hash expects (pwhash, password)
+            password_ok = werk_check_password_hash(user.get('password_hash') or '', validated['password'])
+        except Exception:
+            logger.debug("werkzeug check failed, falling back to bcrypt check", exc_info=True)
+            password_ok = check_password(validated['password'], user.get('password_hash') or '')
 
-    update_user_last_active(user['id'])
-    access_token = create_access_token({'sub': str(user['id']), 'role': user['role']})
-    refresh_token, refresh_expires = _build_refresh_token(user['id'], user_agent=user_agent, ip_address=ip_address, remember=remember)
+        if not password_ok:
+            return None
 
-    return {
-        'user': _serialize_user(user),
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'refresh_expires': refresh_expires,
-    }
+        update_user_last_active(user['id'])
+        access_token = create_access_token({'sub': str(user['id']), 'role': user['role']})
+        refresh_token, refresh_expires = _build_refresh_token(user['id'], user_agent=user_agent, ip_address=ip_address, remember=remember)
+
+        # Convert datetime to ISO string to avoid JSON serialization errors downstream
+        if hasattr(refresh_expires, 'isoformat'):
+            refresh_expires = refresh_expires.isoformat()
+
+        return {
+            'user': _serialize_user(user),
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'refresh_expires': refresh_expires,
+        }
+    except ValueError:
+        # validation errors should bubble up as None to let caller respond with 400
+        raise
+    except Exception:
+        logger.exception("Error authenticating user")
+        # re-raise so route can return 500 and log appropriately
+        raise
 
 
 def get_user_session(refresh_token):
