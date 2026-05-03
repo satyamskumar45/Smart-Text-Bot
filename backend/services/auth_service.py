@@ -56,6 +56,11 @@ def register_user(email, password, display_name=None, guest_session_id=None, rem
     password_hash = hash_password(validated["password"])
     user_id = create_user(validated["email"], password_hash, display_name)
 
+    # Ensure user was created; handle race conditions or DB failures
+    if not user_id:
+        logger.exception("User creation failed for email=%s", validated["email"])
+        raise ValueError("User creation failed")
+
     if guest_session_id:
         convert_guest_to_user(guest_session_id, user_id)
 

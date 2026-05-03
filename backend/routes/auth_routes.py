@@ -46,11 +46,24 @@ def login():
             ip_address=request.remote_addr,
         )
         if not result:
+            current_app.logger.info("Login failed: no result returned for email=%s", payload.get("email"))
             return error_response(message="Invalid credentials", status_code=401)
-        return success_response(data=result, message="Authenticated", status_code=200)
+
+        return success_response(data=result, message="Login successful", status_code=200)
     except ValueError as ve:
-        current_app.logger.info("Login validation/error: %s", ve)
-        return error_response(message=str(ve), status_code=400)
+        # Map known validation/value errors to appropriate status codes
+        msg = str(ve) or "Invalid request"
+        lower = msg.lower()
+        current_app.logger.info("Login validation/error: %s", msg)
+
+        if "not found" in lower or "no user" in lower:
+            return error_response(message=msg, status_code=404)
+        if "invalid" in lower or "password" in lower or "credentials" in lower:
+            return error_response(message="Invalid credentials", status_code=401)
+        if "inactive" in lower:
+            return error_response(message=msg, status_code=403)
+
+        return error_response(message=msg, status_code=400)
     except Exception:
         current_app.logger.exception("Login error")
         return error_response(message="Internal server error", status_code=500)
