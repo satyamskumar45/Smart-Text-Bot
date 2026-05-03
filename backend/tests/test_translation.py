@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Test configuration
-BASE_URL = "https://smart-text-bot-backend-docker.onrender.com"
+BASE_URL = "https://smart-text-bot-backend.onrender.com"
 TRANSLATE_ENDPOINT = f"{BASE_URL}/translate"
 EXPLAIN_ENDPOINT = f"{BASE_URL}/explain"
 

@@ -49,28 +49,31 @@ def create_app():
     app.config["JSON_SORT_KEYS"] = False
 
     # ================= CORS (FINAL FIX) =================
-    FRONTEND_URL = "https://5664ca3c.smart-text-bot.pages.dev"
+    allowed_origins = list(dict.fromkeys(Settings.ALLOWED_ORIGINS))
+    pages_preview_origin_pattern = r"^https://.*\.smart-text-bot\.pages\.dev$"
 
     CORS(
         app,
-        resources={r"/*": {"origins": [FRONTEND_URL]}},
+        resources={r"/*": {"origins": allowed_origins + [pages_preview_origin_pattern]}},
         supports_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
 
     # 🔥 HARD CORS FIX (guarantees preflight works)
+    def is_allowed_origin(origin):
+        return origin in allowed_origins or re.match(pages_preview_origin_pattern, origin)
+
     @app.after_request
     def add_cors_headers(response):
         origin = request.headers.get("Origin")
 
-        if origin and (
-            origin == FRONTEND_URL
-            or re.match(r"^https://.*\.smart-text-bot\.pages\.dev$", origin)
-        ):
+        if origin and is_allowed_origin(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Vary"] = "Origin"
 
         return response
 

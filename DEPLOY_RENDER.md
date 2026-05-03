@@ -21,7 +21,7 @@ Render deployment steps and required environment variables
 - In Render dashboard create a new Static Site
   - Build Command: `npm install && npm run build`
   - Publish Directory: `frontend/dist` or `frontend/build` depending on your bundler
-  - Set environment variable `REACT_APP_API_URL` to your backend URL (e.g., `https://smart-text-bot-backend.onrender.com`)
+  - Set environment variable `VITE_API_BASE_URL` to your backend URL (e.g., `https://smart-text-bot-backend.onrender.com`)
 
 3) CORS & secrets
 

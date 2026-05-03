@@ -87,7 +87,7 @@ Backend:
 
 Frontend:
 
-- `VITE_API_BASE_URL` - optional custom backend URL, defaults to `https://smart-text-bot-backend-docker.onrender.com`
+- `VITE_API_BASE_URL` - optional custom backend URL, e.g. `https://smart-text-bot-backend.onrender.com`
 
 ## Folder Structure
 

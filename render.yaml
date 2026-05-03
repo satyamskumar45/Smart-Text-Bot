@@ -11,6 +11,7 @@ services:
       - key: JWT_SECRET_KEY
       - key: GROQ_API_KEY
       - key: ALLOWED_ORIGINS
+        value: https://5664ca3c.smart-text-bot.pages.dev,https://smart-text-bot.pages.dev
 
   - type: static_site
     name: smart-text-bot-frontend
@@ -19,4 +20,5 @@ services:
     buildCommand: cd frontend && npm ci && npm run build
     publishPath: frontend/dist
     envVars:
-      - key: REACT_APP_API_URL
+      - key: VITE_API_BASE_URL
+        value: https://smart-text-bot-backend.onrender.com

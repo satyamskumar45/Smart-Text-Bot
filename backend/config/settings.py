@@ -51,6 +51,15 @@ class Settings:
     RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "True").lower() in ("1", "true", "yes")
     RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "90"))
 
+    ALLOWED_ORIGINS = [
+        origin.strip()
+        for origin in os.getenv(
+            "ALLOWED_ORIGINS",
+            "https://5664ca3c.smart-text-bot.pages.dev,https://smart-text-bot.pages.dev,http://localhost:5173",
+        ).split(",")
+        if origin.strip()
+    ]
+
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     SUPPORTED_LANGUAGES = load_supported_languages()
 
