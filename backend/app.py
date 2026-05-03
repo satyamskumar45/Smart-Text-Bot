@@ -116,11 +116,11 @@ def create_app():
 # ================= ENTRY =================
 app = create_app()
 
+@app.route("/routes")
+def list_routes():
+    return {"routes": [str(rule) for rule in app.url_map.iter_rules()]}
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-    @app.route("/routes")
-def list_routes():
-    return {
-        "routes": [str(rule) for rule in app.url_map.iter_rules()]
-    }
