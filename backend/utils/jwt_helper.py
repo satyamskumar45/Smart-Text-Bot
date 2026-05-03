@@ -10,6 +10,7 @@ def create_access_token(payload):
         'exp': now + timedelta(minutes=Settings.ACCESS_TOKEN_EXPIRES_MINUTES),
         'iat': now,
         'nbf': now,
+        'type': 'access',
         **payload,
     }
     return jwt.encode(token_payload, Settings.JWT_SECRET_KEY, algorithm=Settings.JWT_ALGORITHM)
