@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: smart-text-bot-backend
+    env: python
+    plan: starter
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: MONGO_URI
+      - key: MONGO_DB_NAME
+      - key: JWT_SECRET_KEY
+      - key: GROQ_API_KEY
+      - key: ALLOWED_ORIGINS
+
+  - type: static_site
+    name: smart-text-bot-frontend
+    env: node
+    plan: starter
+    buildCommand: cd frontend && npm ci && npm run build
+    publishPath: frontend/dist
+    envVars:
+      - key: REACT_APP_API_URL

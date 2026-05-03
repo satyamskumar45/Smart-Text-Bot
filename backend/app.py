@@ -1,9 +1,12 @@
-print("🔥 RENDER NEW VERSION LOADED 🔥")
 import logging
 import os
 import re
+from logging import StreamHandler
 
 from flask import Flask, jsonify, request, current_app
+from utils.response import error_response
+from config.error_handlers import register_error_handlers
+from flask_cors import CORS
 from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
 
@@ -23,8 +26,9 @@ from routes.voice_routes import voice_bp
 def _validate_required_settings():
     if not Settings.JWT_SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY environment variable is required.")
-    if not os.getenv("MONGO_URI"):
-        raise RuntimeError("MONGO_URI environment variable is required.")
+    # Do not require MONGO_URI at startup to allow the app to boot without a DB during
+    # early deployment steps. DB initialization is attempted in `init_db()` and
+    # failures are logged; endpoints must handle DB unavailability.
 
 
 # ================= CORS CHECK =================
@@ -53,45 +57,34 @@ def create_app():
     level = getattr(Settings, "LOG_LEVEL", "INFO")
     numeric_level = getattr(logging, level.upper(), logging.INFO)
 
-    handler = logging.StreamHandler()
+    # Ensure we don't duplicate handlers when reloading in dev
+    logging.root.handlers.clear()
+    handler = StreamHandler()
     handler.setLevel(numeric_level)
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
-
     logging.root.setLevel(numeric_level)
     logging.root.addHandler(handler)
 
-    # Init DB
-    init_db()
-
     app = Flask(__name__)
+    app.config.from_object(Settings)
     app.config["JSON_SORT_KEYS"] = False
 
-    # ================= CORS (MANUAL FIX) =================
-    @app.after_request
-    def add_cors_headers(response):
-        origin = request.headers.get("Origin")
+    # ================= CORS =================
+    allowed_origins_env = os.getenv(
+        "ALLOWED_ORIGINS",
+        "https://smart-text-bot.pages.dev,http://localhost:5173,http://127.0.0.1:5173",
+    )
+    allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+    # Allow Cloudflare preview pattern as well
+    allowed_origins.append(r"^https://.*\\.smart-text-bot\\.pages\\.dev$")
 
-        if _is_allowed_origin(origin):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    CORS(app, origins=allowed_origins, supports_credentials=True)
 
-        return response
-
-    @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            response = app.make_response("")
-            origin = request.headers.get("Origin")
-
-            if _is_allowed_origin(origin):
-                response.headers["Access-Control-Allow-Origin"] = origin
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-
-            return response
+    # Init DB (attempt; will raise if misconfigured)
+    try:
+        init_db()
+    except Exception:
+        app.logger.exception("Database initialization failed during startup")
 
     # ================= LOG REQUESTS =================
     @app.before_request
@@ -114,26 +107,8 @@ def create_app():
     app.register_blueprint(image_bp)
     app.register_blueprint(voice_bp)
 
-    # ================= ERROR HANDLERS =================
-    @app.errorhandler(RuntimeError)
-    def handle_runtime_error(error):
-        return jsonify({"status": "fail", "message": str(error)}), 500
-
-    @app.errorhandler(PyMongoError)
-    def handle_pymongo_error(_error):
-        return jsonify({"status": "fail", "message": "Database error"}), 500
-
-    @app.errorhandler(HTTPException)
-    def handle_http_exception(error):
-        return jsonify({"status": "fail", "message": error.description}), error.code
-
-    @app.errorhandler(Exception)
-    def handle_unexpected_error(error):
-        app.logger.exception("Unhandled server error")
-        return jsonify({
-            "status": "fail",
-            "message": str(error) if app.debug else "Internal server error."
-        }), 500
+    # Register centralized error handlers
+    register_error_handlers(app)
 
     return app
 
