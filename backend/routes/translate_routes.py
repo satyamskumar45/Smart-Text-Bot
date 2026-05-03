@@ -1,19 +1,22 @@
-from flask import Blueprint, request, jsonify
+
+from flask import Blueprint, request, current_app
+from services.chatbot_service import translate as translate_service
+from utils.response import success, error
 
 translate_bp = Blueprint("translate", __name__)
 
 
 @translate_bp.route("/translate", methods=["POST"])
 def translate():
-    data = request.get_json(silent=True) or {}
-    text = data.get("text", "")
-    target = data.get("target", "")
-    if not text or not target:
-        return jsonify({"status": "fail", "message": "text and target are required"}), 400
-
     try:
-        from deep_translator import GoogleTranslator
-        translated = GoogleTranslator(source="auto", target=target).translate(text)
-        return jsonify({"status": "success", "translation": translated})
+        data = request.get_json(silent=True) or {}
+        text = data.get("text")
+        target = data.get("target")
+        translated = translate_service(text, target)
+        return success({"translation": translated}, status_code=200)
+    except ValueError as ve:
+        current_app.logger.info("Translate validation error: %s", ve)
+        return error(message=str(ve), status_code=400)
     except Exception as exc:
-        return jsonify({"status": "fail", "message": str(exc)}), 500
+        current_app.logger.exception("Translate error")
+        return error(message="Translation failed", status_code=500)
