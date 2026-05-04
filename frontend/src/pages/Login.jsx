@@ -41,8 +41,8 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-hero">
+    <div className="auth-page min-h-screen bg-ink/95 p-4 sm:p-6">
+      <div className="auth-hero mx-auto w-full max-w-6xl motion-safe:animate-[fade-in_0.4s_ease]">
         <div className="auth-panel auth-panel-brand">
           <div className="hero-eyebrow">
             <span className="hero-eyebrow-dot" />
@@ -60,7 +60,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="auth-panel auth-panel-form">
+        <div className="auth-panel auth-panel-form shadow-glow">
           <div className="auth-form-header">
             <span className="auth-kicker">Login</span>
             <h2>Sign in</h2>
@@ -100,10 +100,20 @@ export default function Login() {
               />
             </div>
 
-            {error ? <div className="auth-error">{error}</div> : null}
+            {error ? (
+              <div className="auth-error" role="alert">
+                {error}
+              </div>
+            ) : null}
 
-            <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
-              {submitting ? "Signing in..." : "Sign in"}
+            <button type="submit" className="btn btn-primary btn-full" disabled={submitting || status === "loading"}>
+              {submitting ? (
+                <>
+                  <div className="spinner" /> Signing in...
+                </>
+              ) : (
+                "Sign in"
+              )}
             </button>
           </form>
 

@@ -10,7 +10,6 @@ from utils.auth import auth_required, get_bearer_token
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 logger = logging.getLogger(__name__)
 
-
 @auth_bp.route("/signup", methods=["POST"])
 def signup():
     try:

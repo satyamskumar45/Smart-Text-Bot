@@ -2,15 +2,16 @@ import { useState } from "react";
 import { sentiment } from "../services/api";
 
 const VERDICTS = {
-  positive: { emoji: "😊", label: "Positive", color: "#4cde9c" },
-  negative: { emoji: "😞", label: "Negative", color: "#ff5b6a" },
-  neutral: { emoji: "😐", label: "Neutral", color: "#4f8ef7" },
+  positive: { marker: "+", label: "Positive", color: "#4cde9c" },
+  negative: { marker: "-", label: "Negative", color: "#ff5b6a" },
+  neutral: { marker: "=", label: "Neutral", color: "#4f8ef7" },
 };
 
 export default function Sentiment() {
   const [text, setText] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const run = async () => {
     if (!text.trim()) {
@@ -18,6 +19,7 @@ export default function Sentiment() {
     }
 
     setLoading(true);
+    setError("");
     try {
       const raw = await sentiment(text);
       if (raw.positive !== undefined) {
@@ -43,8 +45,9 @@ export default function Sentiment() {
           verdict: label,
         });
       }
-    } catch {
+    } catch (runError) {
       setResult(null);
+      setError(runError.message || "Unable to analyze sentiment.");
     } finally {
       setLoading(false);
     }
@@ -58,7 +61,7 @@ export default function Sentiment() {
   ];
 
   return (
-    <div>
+    <div className="motion-safe:animate-[fade-in_0.35s_ease]">
       <div className="page-header">
         <h1>Sentiment Analysis</h1>
         <p>Analyze the emotional tone of any text with AI-powered sentiment scoring.</p>
@@ -67,7 +70,7 @@ export default function Sentiment() {
       <div className="card">
         <div className="card-header">
           <div className="card-title">
-            <span className="card-title-icon">●</span>
+            <span className="card-title-icon">SA</span>
             Sentiment Analyzer
           </div>
           {result && verdict && (
@@ -86,9 +89,10 @@ export default function Sentiment() {
                 style={{ height: 180 }}
                 value={text}
                 onChange={(event) => setText(event.target.value)}
-                placeholder="Paste or type any text — a review, tweet, message, or article..."
+                placeholder="Paste or type any text - a review, tweet, message, or article..."
               />
             </div>
+            {error ? <div className="auth-error" role="alert">{error}</div> : null}
 
             <button className="btn btn-primary btn-full" onClick={run} disabled={loading || !text.trim()}>
               {loading ? (
@@ -96,7 +100,7 @@ export default function Sentiment() {
                   <div className="spinner" /> Analyzing...
                 </>
               ) : (
-                <>● Analyze Sentiment</>
+                <>Analyze Sentiment</>
               )}
             </button>
 
@@ -113,7 +117,7 @@ export default function Sentiment() {
             {result && verdict ? (
               <>
                 <div className="sentiment-verdict" style={{ borderColor: `${verdict.color}30` }}>
-                  <div className="verdict-emoji">{verdict.emoji}</div>
+                  <div className="verdict-emoji">{verdict.marker}</div>
                   <div>
                     <div className="verdict-label" style={{ color: verdict.color }}>
                       {verdict.label}
@@ -153,7 +157,7 @@ export default function Sentiment() {
                   textAlign: "center",
                 }}
               >
-                <div style={{ fontSize: 32, opacity: 0.3 }}>●</div>
+                <div style={{ fontSize: 32, opacity: 0.3 }}>SA</div>
                 <div style={{ fontSize: 14, color: "var(--text-2)" }}>No analysis yet</div>
                 <div style={{ fontSize: 13, lineHeight: 1.5, maxWidth: 220 }}>
                   Enter some text and click Analyze to see sentiment scores.

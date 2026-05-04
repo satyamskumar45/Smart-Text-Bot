@@ -87,7 +87,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="quest-layout">
+    <div className="quest-layout motion-safe:animate-[fade-in_0.35s_ease]">
       <div className="quest-hero">
         <div>
           <div className="hero-eyebrow">
@@ -206,14 +206,45 @@ export default function Chat() {
           <div className="action-row">
             <div className="spacer" />
             <button type="button" className="btn btn-primary" onClick={runPractice} disabled={loading}>
-              {loading ? "Checking..." : `Practice ${languageName}`}
+              {loading ? (
+                <>
+                  <div className="spinner" /> Checking...
+                </>
+              ) : (
+                `Practice ${languageName}`
+              )}
             </button>
           </div>
-          {practiceResult ? (
+          {(practiceResult || coachNote || loading) ? (
             <div className="practice-result-card">
-              <span>Translation</span>
-              <strong>{practiceResult}</strong>
-              {coachNote ? <p>{coachNote}</p> : null}
+              <span>Coach Chat</span>
+              <div className="chat-messages !min-h-0 !p-0">
+                <div className="msg-wrapper user">
+                  <div className="msg-avatar">You</div>
+                  <div className="msg-bubble">{practiceText}</div>
+                </div>
+                {practiceResult ? (
+                  <div className="msg-wrapper bot">
+                    <div className="msg-avatar">AI</div>
+                    <div className="msg-bubble">
+                      <strong>{practiceResult}</strong>
+                    </div>
+                  </div>
+                ) : null}
+                {coachNote ? (
+                  <div className="msg-wrapper bot">
+                    <div className="msg-avatar">Tip</div>
+                    <div className="msg-bubble">{coachNote}</div>
+                  </div>
+                ) : null}
+                {loading ? (
+                  <div className="typing-indicator">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </section>

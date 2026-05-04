@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import * as api from "../services/api";
 
 const statCards = [
@@ -68,7 +69,7 @@ export default function Dashboard() {
   const completion = Math.min(100, Math.max(12, totalActivity * 8));
 
   return (
-    <div className="dashboard-page dashboard-v2">
+    <div className="dashboard-page dashboard-v2 motion-safe:animate-[fade-in_0.35s_ease]">
       <section className="dashboard-hero">
         <div>
           <div className="hero-eyebrow">
@@ -87,8 +88,12 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {loading ? <div className="loading-card">Loading dashboard metrics...</div> : null}
-      {error ? <div className="auth-error">{error}</div> : null}
+      {loading ? (
+        <div className="loading-card flex items-center gap-3">
+          <div className="spinner" /> Loading dashboard metrics...
+        </div>
+      ) : null}
+      {error ? <div className="auth-error" role="alert">{error}</div> : null}
 
       <div className="dashboard-grid">
         {statCards.map((item) => (
@@ -104,10 +109,10 @@ export default function Dashboard() {
           </div>
           <div className="mission-list">
             {missions.map((mission) => (
-              <a key={mission.title} className="mission-item" href={mission.path}>
+              <Link key={mission.title} className="mission-item transition-all duration-200 hover:-translate-y-0.5" to={mission.path}>
                 <span>{mission.title}</span>
                 <strong>{mission.reward}</strong>
-              </a>
+              </Link>
             ))}
           </div>
         </section>

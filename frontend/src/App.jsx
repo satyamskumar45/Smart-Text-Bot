@@ -16,15 +16,15 @@ import { API_BASE_URL } from "./services/api";
 import "./style.css";
 
 const navItems = [
-  { to: "/dashboard", icon: "D", label: "Dashboard" },
-  { to: "/", icon: "O", label: "Overview", exact: true },
-  { to: "/chat", icon: "Q", label: "Language Quest" },
-  { to: "/translate", icon: "T", label: "Translate" },
-  { to: "/sentiment", icon: "S", label: "Sentiment" },
-  { to: "/summarize", icon: "M", label: "Summarizer" },
-  { to: "/pipeline", icon: "P", label: "Pipeline" },
-  { to: "/image-scan", icon: "G", label: "Grammar" },
-  { to: "/admin", icon: "A", label: "Admin", role: "admin" },
+  { to: "/dashboard", icon: "DB", label: "Dashboard" },
+  { to: "/", icon: "OV", label: "Overview", exact: true },
+  { to: "/chat", icon: "LQ", label: "Language Quest" },
+  { to: "/translate", icon: "TR", label: "Translate" },
+  { to: "/sentiment", icon: "SA", label: "Sentiment" },
+  { to: "/summarize", icon: "SM", label: "Summarizer" },
+  { to: "/pipeline", icon: "DP", label: "Pipeline" },
+  { to: "/image-scan", icon: "GR", label: "Grammar" },
+  { to: "/admin", icon: "AD", label: "Admin", role: "admin" },
 ];
 
 const pageTitles = {
@@ -46,7 +46,7 @@ function Sidebar() {
   const visibleNavItems = navItems.filter((item) => !item.role || user?.role === item.role);
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar motion-safe:animate-[fade-in_0.35s_ease]">
       <div className="sidebar-logo">
         <div className="sidebar-logo-mark">
           <div className="logo-icon">AI</div>
@@ -62,7 +62,10 @@ function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.exact}
-            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+            className={({ isActive }) =>
+              `nav-item transition-all duration-200${isActive ? " active" : ""}`
+            }
+            title={item.label}
           >
             <div className="nav-icon">{item.icon}</div>
             <span>{item.label}</span>
@@ -108,7 +111,7 @@ function Topbar() {
           <span className="topbar-user-name">{user?.name || user?.email || "Authenticated User"}</span>
           <span className="topbar-user-role">{user?.role || "user"} · {user?.email}</span>
         </div>
-        <button type="button" className="btn btn-ghost" onClick={handleLogout}>
+        <button type="button" className="btn btn-ghost transition-all duration-200" onClick={handleLogout}>
           Logout
         </button>
       </div>
@@ -137,7 +140,7 @@ function ProtectedAppLayout() {
         <Sidebar />
         <div className="main-content">
           <Topbar />
-          <div className="page-content">
+          <div className="page-content motion-safe:animate-[fade-in_0.35s_ease]">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/dashboard" element={<Dashboard />} />

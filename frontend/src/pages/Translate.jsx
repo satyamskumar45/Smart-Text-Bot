@@ -19,6 +19,7 @@ export default function Translate() {
   const [variants, setVariants] = useState({});
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState("");
+  const [error, setError] = useState("");
 
   const options = languageOptions();
 
@@ -39,6 +40,7 @@ export default function Translate() {
     }
 
     setLoading(true);
+    setError("");
     setOutput("");
     setVariants({});
 
@@ -53,7 +55,7 @@ export default function Translate() {
       setOutput(result.translation || "");
       setVariants(result.variants || {});
     } catch (error) {
-      setOutput(error.message || "Translation failed.");
+      setError(error.message || "Translation failed.");
     } finally {
       setLoading(false);
     }
@@ -69,7 +71,7 @@ export default function Translate() {
   }
 
   return (
-    <div className="translate-layout">
+    <div className="translate-layout motion-safe:animate-[fade-in_0.35s_ease]">
       <section className="translate-hero">
         <div>
           <div className="hero-eyebrow">
@@ -153,9 +155,17 @@ export default function Translate() {
             <span>{tone.replace(" conversational", "")}</span>
           </div>
           <button type="button" className="btn btn-primary" onClick={run} disabled={loading || !input.trim()}>
-            {loading ? "Translating..." : "Translate"}
+            {loading ? (
+              <>
+                <div className="spinner" /> Translating...
+              </>
+            ) : (
+              "Translate"
+            )}
           </button>
         </div>
+        {error ? <div className="auth-error mt-4" role="alert">{error}</div> : null}
+        {copied ? <div className="admin-notice">Copied to clipboard.</div> : null}
       </div>
 
       <div className="variant-grid">
