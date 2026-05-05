@@ -86,7 +86,7 @@ export default function Pipeline() {
         }
       }, 150);
     } catch (err) {
-      setOcrError(err?.message || "OCR failed. Try a different image.");
+      setOcrError(err?.message || "OCR failed. Try a clearer image.");
     } finally {
       setOcrLoading(false);
       setOcrProgress(100);

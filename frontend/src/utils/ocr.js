@@ -36,25 +36,39 @@ async function getWorkerEntry(lang = "eng") {
   if (entry) return entry;
 
   const callbacks = new Set();
-  const worker = createWorker({
-    logger: (m) => {
-      if (m && m.status === "recognizing text" && typeof m.progress === "number") {
+  // Create worker using latest tesseract.js API. Some versions accept a language
+  // as the first argument (createWorker(lang, opts)), others accept an options
+  // object. Try both patterns and fall back gracefully.
+  const logger = (m) => {
+    try {
+      if (m && typeof m.progress === "number") {
         const pct = Math.round(m.progress * 100);
         callbacks.forEach((cb) => {
           try {
             cb(pct);
           } catch (e) {
-            // ignore
+            // ignore callback errors
           }
         });
       }
-    },
-  });
+    } catch (err) {
+      // logger should never throw
+    }
+  };
 
-  // initialize worker for the language
-  await worker.load();
-  await worker.loadLanguage(lang);
-  await worker.initialize(lang);
+  let worker;
+  try {
+    // Preferred: createWorker(language, { logger }) if supported
+    // (some newer bundles added a convenience overload)
+    worker = createWorker(lang, { logger });
+  } catch (e) {
+    // Fallback to object-style creation
+    worker = createWorker({ logger });
+  }
+
+  // Do NOT call worker.load()/loadLanguage()/initialize() here to avoid
+  // deprecated or missing methods on some distributions. Recent versions of
+  // tesseract.js will lazy-load/initialize when `recognize` is first called.
 
   entry = { worker, callbacks };
   workerPool.set(lang, entry);
@@ -87,7 +101,20 @@ export async function extractTextFromImage(file, onProgress, lang = "eng") {
   if (onProgress) entry.callbacks.add(onProgress);
 
   try {
-    const { data } = await entry.worker.recognize(inputFile);
+    // Try a few recognize invocation signatures for compatibility across
+    // different tesseract.js releases/bundles.
+    let result;
+    try {
+      result = await entry.worker.recognize(inputFile, lang);
+    } catch (e1) {
+      try {
+        result = await entry.worker.recognize(inputFile, { lang });
+      } catch (e2) {
+        result = await entry.worker.recognize(inputFile);
+      }
+    }
+
+    const { data } = result || {};
     return data?.text || "";
   } finally {
     if (onProgress) entry.callbacks.delete(onProgress);
